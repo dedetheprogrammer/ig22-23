@@ -1,0 +1,15 @@
+
+{
+	"version": "2.0.0",
+  	"tasks": [
+    	{
+    		"label": "build",
+    		"command": "g++",
+			"args": [ "main.cpp", "-O3", "-g", "-Wall", "-I", "../libs", "-std=c++11", "-pthread", "-o", "ray_tracer"],
+    		"group": {
+    			"kind": "build",
+    			"isDefault": true
+    		}
+    	}
+  	]
+}

@@ -1,0 +1,55 @@
+falco-86qpj falco-driver-loader ================ Cleaning phase ================
+falco-86qpj falco-driver-loader 
+falco-86qpj falco-driver-loader * 1. Check if kernel module 'falco' is still loaded:
+falco-86qpj falco-driver-loader - OK! There is no 'falco' module loaded.
+falco-86qpj falco-driver-loader 
+falco-86qpj falco-driver-loader * 2. Check all versions of kernel module 'falco' in dkms:
+falco-86qpj falco-driver-loader - There are some versions of 'falco' module in dkms.
+falco-86qpj falco-driver-loader 
+falco-86qpj falco-driver-loader * 3. Removing all the following versions from dkms:
+falco-86qpj falco-driver-loader 3.0.1+driver
+falco-86qpj falco-driver-loader 
+falco-86qpj falco-driver-loader - Removing 3.0.1+driver...
+falco-86qpj falco-driver-loader 
+falco-86qpj falco-driver-loader ------------------------------
+falco-86qpj falco-driver-loader Deleting module version: 3.0.1+driver
+falco-86qpj falco-driver-loader completely from the DKMS tree.
+falco-86qpj falco-driver-loader ------------------------------
+falco-86qpj falco-driver-loader Done.
+falco-86qpj falco-driver-loader 
+falco-86qpj falco-driver-loader - OK! Removing '3.0.1+driver' succeeded.
+falco-86qpj falco-driver-loader 
+falco-86qpj falco-driver-loader 
+falco-86qpj falco-driver-loader [SUCCESS] Cleaning phase correctly terminated.
+falco-86qpj falco-driver-loader 
+falco-86qpj falco-driver-loader ================ Cleaning phase ================
+falco-86qpj falco-driver-loader 
+falco-86qpj falco-driver-loader * Looking for a falco module locally (kernel 5.19.15-201.fc36.aarch64)
+falco-86qpj falco-driver-loader * Filename 'falco_ubuntu-generic_5.19.15-201.fc36.aarch64_1.ko' is composed of:
+falco-86qpj falco-driver-loader  - driver name: falco
+falco-86qpj falco-driver-loader  - target identifier: ubuntu-generic
+falco-86qpj falco-driver-loader  - kernel release: 5.19.15-201.fc36.aarch64
+falco-86qpj falco-driver-loader  - kernel version: 1
+falco-86qpj falco-driver-loader * Trying to download a prebuilt falco module from https://download.falco.org/driver/3.0.1%2Bdriver/aarch64/falco_ubuntu-generic_5.19.15-201.fc36.aarch64_1.ko
+falco-86qpj falco-driver-loader curl: (22) The requested URL returned error: 404 
+falco-86qpj falco-driver-loader Unable to find a prebuilt falco module
+falco-86qpj falco-driver-loader * Trying to dkms install falco module with GCC /usr/bin/gcc
+falco-86qpj falco-driver-loader DIRECTIVE: MAKE="'/tmp/falco-dkms-make'"
+falco-86qpj falco-driver-loader 
+falco-86qpj falco-driver-loader Creating symlink /var/lib/dkms/falco/3.0.1+driver/source ->
+falco-86qpj falco-driver-loader                  /usr/src/falco-3.0.1+driver
+falco-86qpj falco-driver-loader 
+falco-86qpj falco-driver-loader DKMS: add completed.
+falco-86qpj falco-driver-loader * Running dkms build failed, couldn't find /var/lib/dkms/falco/3.0.1+driver/build/make.log (with GCC /usr/bin/gcc)
+falco-86qpj falco-driver-loader * Trying to dkms install falco module with GCC /usr/bin/gcc-8
+falco-86qpj falco-driver-loader DIRECTIVE: MAKE="'/tmp/falco-dkms-make'"
+falco-86qpj falco-driver-loader * Running dkms build failed, couldn't find /var/lib/dkms/falco/3.0.1+driver/build/make.log (with GCC /usr/bin/gcc-8)
+falco-86qpj falco-driver-loader * Trying to dkms install falco module with GCC /usr/bin/gcc-6
+falco-86qpj falco-driver-loader DIRECTIVE: MAKE="'/tmp/falco-dkms-make'"
+falco-86qpj falco-driver-loader * Running dkms build failed, couldn't find /var/lib/dkms/falco/3.0.1+driver/build/make.log (with GCC /usr/bin/gcc-6)
+falco-86qpj falco-driver-loader * Trying to dkms install falco module with GCC /usr/bin/gcc-5
+falco-86qpj falco-driver-loader DIRECTIVE: MAKE="'/tmp/falco-dkms-make'"
+falco-86qpj falco-driver-loader * Running dkms build failed, couldn't find /var/lib/dkms/falco/3.0.1+driver/build/make.log (with GCC /usr/bin/gcc-5)
+falco-86qpj falco-driver-loader * Trying to load a system falco module, if present
+falco-86qpj falco-driver-loader Consider compiling your own falco driver and loading it or getting in touch with the Falco community
+- falco-86qpj › falco-driver-loader

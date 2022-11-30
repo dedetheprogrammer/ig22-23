@@ -1,6 +1,7 @@
 #pragma once
 #include <cassert>
-#include <cmath>    
+#include <cmath>   
+#include <iomanip>     
 #include <sstream>
 #include "utils.hpp"
 
@@ -124,9 +125,16 @@ public:
                         //      RGB value will representate transparency.
     bool has_color_key; // Indicates if the ppm file has a color key, necessary because the program
                         //      could have determined RGB(0,0,0) as the color key.
-    bool data_per_line;
     
     Image() {}
+
+    Image(int width, int height) : format("P3") {
+        this->name   = "IMAGE";
+        this->width  = width;
+        this->height = height;
+        this->pixels = Channels(height, std::vector<RGB>(width));
+        this->maxval = this->memval = 0;
+    }
 
     Image(float maxval, int colres, Channels pixels) : format("P3"), pixels(pixels) {
         this->name   = "IMAGE";
@@ -181,9 +189,9 @@ void export_image(Image& i, std::string path, bool conversion = 0) {
     for (auto& h : i.pixels) {
         for (auto& w : h) {
             w = w * (conversion ? 255 : i.colres/i.maxval);
-            os << static_cast<int>(std::ceil(w.R)) << " " 
-               << static_cast<int>(std::ceil(w.G)) << " "
-               << static_cast<int>(std::ceil(w.B)) << "     ";
+            os << static_cast<int>(w.R) << " " 
+               << static_cast<int>(w.G) << " "
+               << static_cast<int>(w.B) << "     ";
         }
         os << "\n";
     }
@@ -204,6 +212,7 @@ struct Tone {
 };
 
 void tone_mapping(Image& i, Tone p) {
+
     float max = i.memval;
     if ((p.t_flags & clamp) && (i.memval > p.c_map)) {
         if (p.c_map >= 1.f) i.memval = p.c_map;

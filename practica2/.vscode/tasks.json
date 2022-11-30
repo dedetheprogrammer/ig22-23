@@ -1,0 +1,15 @@
+
+{
+	"version": "2.0.0",
+  	"tasks": [
+    	{
+    		"label": "build",
+    		"command": "g++",
+			"args": [ "main.cpp", "-g", "-Wall", "-std=c++11", "-O3", "-o", "tone_mapper"],
+    		"group": {
+    			"kind": "build",
+    			"isDefault": true
+    		}
+    	}
+  	]
+}

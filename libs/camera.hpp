@@ -24,8 +24,8 @@
 
 using Object_ptr = std::shared_ptr<Object>; 
 using Light_ptr  = std::shared_ptr<Light>;
-using Objects   = std::vector<std::shared_ptr<Object>>;
-using Lights    = std::vector<std::shared_ptr<Light>>;
+using Objects    = std::vector<std::shared_ptr<Object>>;
+using Lights     = std::vector<std::shared_ptr<Light>>;
 
 std::mutex m;
 
@@ -163,12 +163,12 @@ public:
     Vector3 pl, pu;     // Pixel Left + Up dimensions.
                         // - u = center->up border; size = down border->up border = 2u
                         // - l = center->left; size = right border->left border = 2l
-    int h, w, ppp;      // Height, width and points per pixel.
+    int w, h, ppp;      // Height, width and points per pixel.
     CameraGrid grid;    // Camera grid.
     progress_bar bar;   // Progress bar.
 
-    Camera(Vector3 c, Vector3 l, Vector3 u, Vector3 f, int h, int w, int ppp = 1) 
-        : c(c), l(l), u(u), f(f), pl(2*l/w), pu(2*u/h), h(h), w(w), ppp(ppp)
+    Camera(Vector3 c, Vector3 l, Vector3 u, Vector3 f, int w, int h, int ppp = 1) 
+        : c(c), l(l), u(u), f(f), pl(2*l/w), pu(2*u/h), w(w), h(h), ppp(ppp)
     {
         grid = CameraGrid(h, CameraGridRow(w));
         bar  = progress_bar(80, w * h, STYLE1, 250);
@@ -218,16 +218,20 @@ public:
         flush_stream(std::cout);
     }
 
-    Channels getRGB(float& colres) {
-        Channels colors(h, std::vector<RGB>(w));
+    void export_render(std::string render_name = "./new_scene.ppm") {
+
+        Image r(w, h);
         for (int i = 0; i < h; i++) {
             for (int j = 0; j < w; j++) {
-                colors[i][j] = grid[i][j].color;
-                if (colors[i][j].R > colres) colres = colors[i][j].R;
-                if (colors[i][j].G > colres) colres = colors[i][j].G;
-                if (colors[i][j].B > colres) colres = colors[i][j].B; 
+                auto pixel = grid[i][j].color;
+                r.pixels[i][j] = pixel;
+                if (pixel.R > r.maxval) r.maxval = r.memval = pixel.R;
+                if (pixel.G > r.maxval) r.maxval = r.memval = pixel.G;
+                if (pixel.B > r.maxval) r.maxval = r.memval = pixel.B; 
             }
         }
-        return colors;
+        r.colres = r.memres = r.maxval * 255;
+        export_image(r, render_name);
+
     }
 };
