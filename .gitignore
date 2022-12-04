@@ -30,7 +30,7 @@
 *.exe
 *.out
 *.app
-*.vscode*
+*vscode*
 *.dSYM
 *ppm
 *png

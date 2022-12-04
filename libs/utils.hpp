@@ -119,7 +119,7 @@ std::ostream& operator<<(std::ostream& os, std::vector<std::vector<T>>& v) {
 // Insert element in sorted vector and return its correspondent index.
 template <typename T>
 int insert(std::vector<T> &v, T value ) {
-    int at;
+    auto at = v.size();
     for (at = 0; at < v.size() && (v[at] <= value); at++);
     // typename std::vector<T>::iterator it = std::lower_bound(
     //     v.begin(), v.end(), value, std::less_equal<T>()
@@ -227,21 +227,25 @@ public:
 
         float progress  = ((float) ++c_progress / (float)t_progress);
 
+        /*
         auto n = now();
         if (std::chrono::duration_cast<std::chrono::milliseconds>(n - p) > update_t) {
             p = n;
             time *= (t_progress - c_progress);
             eta = elapsed_time(std::chrono::duration_cast<std::chrono::seconds>(time));
-        }
+        }*/
 
         int pos = bar_width * progress;
-        std::string s_bar("ETA: " + eta + " [");
+        std::string s_bar(/*"ETA: " + eta + */" [");
         for (int i = 0; i < bar_width; ++i) {
             if (i < pos) s_bar += style[0];
             else if (i == pos) s_bar += style[1];
             else s_bar += style[2];
         }
-        s_bar += "] " + (std::stringstream() << std::fixed << std::setprecision(2) << progress * 100.).str() + "%\r";
+        s_bar += "] " + 
+            static_cast<const std::stringstream&> (std::stringstream() << 
+                std::fixed << std::setprecision(2) << progress * 100.).str() 
+            + "%\r";
         os << s_bar;
         os.flush();
     }

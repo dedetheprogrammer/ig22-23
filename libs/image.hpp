@@ -1,7 +1,8 @@
 #pragma once
 #include <cassert>
 #include <cmath>   
-#include <iomanip>     
+#include <iomanip>   
+#include <iostream>  
 #include <sstream>
 #include "utils.hpp"
 
@@ -27,10 +28,28 @@ public:
         B += pixel.B;
     }
 
+    void operator*=(const RGB& pixel) {
+        R *= pixel.R;
+        G *= pixel.G;
+        B *= pixel.B;
+    }
+
+    void operator*=(const float d) {
+        R *= d;
+        G *= d;
+        B *= d;
+    }
+
     void operator/=(const float d) {
         R /= d;
         G /= d;
         B /= d;
+    }
+
+    void operator^=(const float d) {
+        R = pow(R, d);
+        G = pow(G, d);
+        B = pow(B, d);
     }
 };
 
@@ -50,6 +69,10 @@ RGB operator/(const RGB& pixel, const float d) {
     return RGB(pixel.R / d, pixel.G / d, pixel.B / d);
 }
 
+RGB operator^(const RGB& pixel, const float d) {
+    return RGB(float(pow(pixel.R, d)), pow(pixel.G, d), pow(pixel.B, d));
+}
+
 bool operator==(const RGB& a, const RGB& b) {
     return a.R == b.R && a.G == b.G && a.B == b.B;
 }
@@ -66,7 +89,7 @@ std::ostream& operator<<(std::ostream& os, const RGB& pixel) {
 // Image
 //===============================================================//
 
-typedef std::vector<std::vector<RGB>> Channels;
+using Channels = std::vector<std::vector<RGB>>;
 
 class Image {
 private:
@@ -75,7 +98,6 @@ private:
 
         // Reading the netpbm file format. This should be P3.
         format = get_line(in);
-        assert(!format.compare("P3") && "unrecognized format, expected P3 format...\n");
 
         // Reading the maximum value and the color key, if there's any. Initially the 
         // memory value is equal to the maximum.
@@ -92,8 +114,6 @@ private:
                 std::stof(ts[2].c_str())
             );
             has_color_key = true;
-        } else {
-            has_color_key = false;
         }
 
         // Reading the file name.
@@ -135,21 +155,14 @@ public:
         this->pixels = Channels(height, std::vector<RGB>(width));
         this->maxval = this->memval = 0;
     }
-
-    Image(float maxval, int colres, Channels pixels) : format("P3"), pixels(pixels) {
-        this->name   = "IMAGE";
-        this->width  = pixels[0].size();
-        this->height = pixels.size();
-        this->maxval = memval = maxval;
-        this->colres = memres = colres;
-    }
-
+    
     Image(std::string file) {
         // Opening the PPM file.
         std::ifstream in(file);
         assert(in.is_open() && "File not found.");
 
         // Reading PPM file header.
+        has_color_key = false;
         read_header(in);
 
         // Reading PPM pixels data.
@@ -172,23 +185,30 @@ std::ostream& operator<<(std::ostream& os, const Image& i) {
         << "\n  Color resolution ... " << i.memres
         << "\n  Color key .......... " << i.color_key
         << "\n}";
+    for (auto& h : i.pixels) {
+        for (auto& w : h) {
+            std::cout << w << "\t";
+        }
+        std::cout << std::endl;
+    }
 }
 
 //===============================================================//
 // Exporting an image.
 //===============================================================//
 
-void export_image(Image& i, std::string path, bool conversion = 0) {   
-    std::ofstream os(path);
+void export_image(Image& i, std::string name, bool LDR = false, bool convert = false) {
+
+    std::ofstream os(name);
     os << i.format << "\n";
-    os << "#MAX=" << i.memval << "\n";
-    os << "# " + get_filename(path)+ "\n";
+    os << "#MAX=" << ((LDR || convert) ? 1.0 : i.memval) << "\n";
+    os << "# " + get_filename(name)+ "\n";
     os << i.width << " " << i.height << "\n";
-    os << static_cast<int>((conversion ? 255 : i.memres)) << "\n";
+    os << (convert ? 255 : i.memres) << "\n";
 
     for (auto& h : i.pixels) {
         for (auto& w : h) {
-            w = w * (conversion ? 255 : i.colres/i.maxval);
+            w = w * (convert && !LDR ? 255 : i.colres/i.maxval);
             os << static_cast<int>(w.R) << " " 
                << static_cast<int>(w.G) << " "
                << static_cast<int>(w.B) << "     ";
@@ -202,45 +222,39 @@ void export_image(Image& i, std::string path, bool conversion = 0) {
 // Tone mapping
 //===============================================================//
 
-struct Tone {
-    int t_flags = 0;
-    float c_map, e_map, g_map;
+void tone_mapping(Image& i, int flags, float c_map = 1.0, float e_map = 1.0, float g_map = 2.2) {
 
-    Tone() : t_flags(0), c_map(0), e_map(0), g_map(0) {}
-    Tone(int t_flags, float c_map, float e_map, float g_map)
-        : t_flags(t_flags), c_map(c_map), e_map(e_map), g_map(g_map) {}
-};
-
-void tone_mapping(Image& i, Tone p) {
-
-    float max = i.memval;
-    if ((p.t_flags & clamp) && (i.memval > p.c_map)) {
-        if (p.c_map >= 1.f) i.memval = p.c_map;
-        i.memres = p.c_map * i.colres/i.maxval;
-        max = p.c_map;
+    if (flags & clamp) {
+        if (c_map > i.memval) return;
+        i.memres = c_map * (float)i.colres/i.maxval;
+        i.memval = c_map;
     }
 
-    if (p.t_flags & equalize) {
-        i.memres = i.colres = p.e_map * i.colres/i.maxval;
-        i.memval = i.maxval = p.e_map;
+    float e_max = i.memval;
+    if (flags & (equalize | gamma)) {
+        i.colres = i.memres = e_map * (float)i.colres/i.maxval;
+        i.maxval = i.memval = e_map;
+    }
+
+    if (flags & gamma) {
+        i.maxval = i.memval = std::pow(i.memval, 1/g_map);
+        i.colres = i.memres = i.memval * (float)i.colres/i.memval;
     }
 
     for (auto& h : i.pixels) {
         for (auto& w : h) {
-            if (p.t_flags & clamp) {
-                if (w.R > p.c_map) w.R = p.c_map;
-                if (w.G > p.c_map) w.G = p.c_map;
-                if (w.B > p.c_map) w.B = p.c_map;
+            if (flags & clamp) {
+                if (w.R > c_map) w.R = c_map;
+                if (w.G > c_map) w.G = c_map;
+                if (w.B > c_map) w.B = c_map;
             }
 
-            if (p.t_flags & (equalize | gamma)) {
-                w = w * p.e_map/max;
+            if (flags & (equalize | gamma)) {
+                w *= (e_map/e_max);
             }
 
-            if (p.t_flags & gamma) {
-                w.R = pow(w.R, 1/p.g_map);
-                w.G = pow(w.G, 1/p.g_map);
-                w.B = pow(w.B, 1/p.g_map);
+            if (flags & gamma) {
+                w ^= (1/g_map);
             }
         }
     }

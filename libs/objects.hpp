@@ -251,8 +251,7 @@ public:
     }
 
     Vector3 normal(Vector3 p, Vector3 wi) override {
-        if (n * wi <= 0) return n;
-        else return -n;
+        return n;
     }
 
 };
