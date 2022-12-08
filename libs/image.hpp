@@ -22,6 +22,14 @@ public:
     RGB(int R, int G, int B) : R(R/255.0), G(G/255.0), B(B/255.0) {}
     RGB(float R = 0.0, float G = 0.0, float B = 0.0) : R(R), G(G), B(B) {}
 
+    void operator=(const int i) {
+        R = G = B = float(i)/255.0;
+    }
+
+    void operator=(const float d) {
+        R = G = B = d;
+    }
+
     void operator+=(const RGB& pixel) {
         R += pixel.R;
         G += pixel.G;

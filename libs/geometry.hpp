@@ -161,17 +161,32 @@ Vector3 crs(Vector3 v, Vector3 w) {
     );
 }
 
-// How to rotate a vector in reference to other vector. Rotate a about b.
+// How to rotate a vector in reference to other vector. Rotating a respect of b.
 // https://math.stackexchange.com/questions/511370/how-to-rotate-one-vector-about-another
-Vector3 rot(Vector3 a, Vector3 b, float r = 90) {
+Vector3 rot(Vector3 a, Vector3 b, float r = M_PI/2) {
+
     Vector3 abb = ((a*b)/(b*b))*b; // a component in the direction of b.
     Vector3 abp = a - abb;         // a component in the direction orthogonal to b.
     Vector3 w = crs(b, abp);       // w component, orthogonal to a and b.
 
     float abp_m = abp.mod();
-    float x1 = cos(r*M_PI/180)/abp_m;
-    float x2 = sin(r*M_PI/180)/abp_m;
+    float x1 = cos(r)/abp_m;
+    float x2 = sin(r)/abp_m;
     return (abp_m * (x1*abp + x2*w)) + abb;
+}
+
+// Orthonormal basis
+// https://graphics.pixar.com/library/OrthonormalB/paper.pdf
+std::vector<Vector3> orthonormal_basis(const Vector3& n) {
+
+    float s = (n.z >= 0.0f ? 1.0f : -1.0f);
+    const float a = -1.0f / (s + n.z);
+    const float b = n.x * n.y * a;
+    return {
+        Vector3(1.0f + s * n.x * n.x * a, s * b, -s * n.x),
+        Vector3(b, s + n.y * n.y *a, -n.y)
+    };
+
 }
 
 // Print vector out.
@@ -433,8 +448,7 @@ public:
         m[0][0] = u.x; m[0][1] = v.x; m[0][2] = w.x; m[0][3] = o.x;
         m[1][0] = u.y; m[1][1] = v.y; m[1][2] = w.y; m[1][3] = o.y;
         m[2][0] = u.z; m[2][1] = v.z; m[2][2] = w.z; m[2][3] = o.z;
-        // Guardar las componentes homogeneas también? Pruebalo a ver si es eso
-        // m[3][0] = u.h; m[3][1] = v.h; m[3][2] = w.h; m[3][3] = o.h;
+        m[3][0] = u.h; m[3][1] = v.h; m[3][2] = w.h; m[3][3] = o.h;
     }
 };
 

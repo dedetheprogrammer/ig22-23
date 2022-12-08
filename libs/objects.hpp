@@ -294,7 +294,7 @@ public:
     }
 
     Vector3 normal(Vector3 p, Vector3 wi) override {
-        return c-p;
+        return p-c;
     }
 };
 

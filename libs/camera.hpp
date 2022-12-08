@@ -47,14 +47,15 @@ public:
 // Pixel: the elemental of the grid.
 //===============================================================//
 
+bool once = true;
 #define BIAS 0.001f
-#define MAX_BOUNCES 10
+#define MAX_DEPTH 2
 
 class Pixel {
 private:
 
     // Render equation.
-    inline RGB RenderEquation(Object_ptr c_obj, Vector3 casted_dir, RGB pow, Ray light_ray, float l_mod) {
+    /*inline RGB RenderEquation(Object_ptr c_obj, Vector3 casted_dir, RGB pow, Ray light_ray, float l_mod) {
         Vector3 n = c_obj->normal(light_ray.p, casted_dir);
         //     Incoming light:         BDRF:         Object geometry:
         return pow / (l_mod * l_mod) * c_obj->fr() * std::abs(n * (light_ray.d / l_mod));
@@ -76,10 +77,12 @@ private:
         }
         if (c_obj != nullptr) {
             Vector3 x = r.d * c_dist + r.p;
-            ret += direct_light(s, r, c_obj, x);
-            // if (n_bounce < MAX_BOUNCES) {
-            //     ret += indirect_light(s, r, c_obj, x, n_bounce);
-            // }
+            RGB lDir = direct_light(s, r, c_obj, x);
+            ret += lDir;
+            if (n_bounce < MAX_BOUNCES) {
+                ret += indirect_light(s, r, c_obj, x, n_bounce);
+            }
+            ret *= c_obj->fr();
         }
         return ret;
     }
@@ -116,15 +119,95 @@ private:
         float lat = acos(sqrt(1 - E(e2)));
         float azi = 2*M_PI*E(e2);
 
-        Vector3 n = c_obj->normal(x, r.d), dir = n.mod() * Vector3(
-            sin(lat) * cos(azi), 
-            sin(lat) * sin(azi),
-            cos(lat)
-        );
-
-        // color_pixel = luz_directa(n) + (2 * luz_directa(n+1) * emision(n) * termino_coseno(n))
+        std::vector<Vector3> b = orthonormal_basis(nor(c_obj->normal(x, r.d)));
+        Vector3 dir = Matrix3BaseChange(b[1], b[0], b[2], x) * 
+            Vector3(sin(lat) * cos(azi), sin(lat) * sin(azi), cos(lat));
+ 
         // Bouncing ray
-        return find_path(s, Ray(x, dir), n_bounce+1) * c_obj->get_kd() * std::abs(n * dir);
+        return find_path(s, Ray(x, dir), n_bounce+1) * M_PI;
+    }*/
+
+    RGB cast_ray(Scene& s, Ray r, int depth) {
+        if (depth > MAX_DEPTH) return RGB();
+
+        RGB direct_light_contrib, indirect_light_contrib;
+        // Distance of the closest intersection point.
+        float c_dist = INFINITY;
+        // Closest object.
+        Object_ptr c_obj;
+        // Calculating possible intersections in the Scene.
+        for (auto& o : s.objects) {
+            auto vt = o->intersects(r);
+            if (vt.size() > 0 && vt[0] > 0 && (vt[0] < c_dist)) {
+                c_dist = vt[0];
+                c_obj  = o;
+            }
+        }
+        if (c_obj == nullptr) return RGB();
+
+        // Compute direct light.
+        // Colision point.
+        Vector3 x = r.d * c_dist + r.p, n = nor(c_obj->normal(x, r.d));
+        for (auto& l : s.lights) {
+
+            Ray lr(x, l->c - x);
+            float l_mod = lr.d.mod();
+            if (std::abs(l_mod) < EPSILON_ERROR) continue;
+
+            bool collides = false;
+            for (auto& o : s.objects) {
+                for (auto& t : o->intersects(lr)) {
+                    if (t > BIAS && t < 1) {
+                        collides = true;
+                        break;
+                    }
+                }
+            }
+            if (collides) continue;
+
+            direct_light_contrib +=
+                (l->pow / (l_mod * l_mod)) *
+                /*(c_obj->fr()) **/
+                std::abs(n * (lr.d / l_mod));
+        }
+
+        // Compute indirect light.
+        std::uniform_real_distribution<> E(0, 1);
+        float lat = acos(sqrt(1 - E(e2))); // SE GENERAN COMO RADIANES
+        float azi = 2*M_PI*E(e2);          // LO HE COMPROBADO.
+        // EXPLICACIÓN DEL NUEVO RAYO GENERADO: 
+        // 1. Utilizando una matriz de cambio de base y/o las propiedades 
+        //    trigonometricas para pasar de polares a cartesianas daría malos
+        //    resultados porque estas propiedades se basan suponiendo que 
+        //    nuestro vector esta alineado a los ejes cartesianos.
+        // 2. Coge por ejemplo sin(lat) * cos(azi), sabemos que el seno calcula
+        //    el cateto opuesto y el coseno el contiguo, si tu vector es paralelo
+        //    al eje Y, la componente x del nuevo vector si es sin(lat) * cos(azi).
+        //    Pero si tu vector es paralelo al eje x, es la componente y quien debería
+        //    tener el valor sin(lat) * cos(azi). Esto hace que en todos los puntos de
+        //    intersección la hemiesfera este alineada al eje Y, por eso hay rayos
+        //    que se generan detras de la pared al rotarlos.
+        // 3. Usar esto nos hace totalmente dependientes de los ejes, por lo que 
+        //    he hecho un truquito de magia para que la rotación sea correcta.
+        //
+        // GENERAMOS UNA BASE ORTONORMAL RESPECTO DE LA NORMAL OBTENIDA.
+        // Se devuelven los dos vectores restantes que conforman la base ortonormal.
+        std::vector<Vector3> b = orthonormal_basis(n);
+        // Ahora, lo que hacemos es rotar uno de estos dos vectores respecto del 
+        // otro no la latitud sino la colatitud, ya que los dos estan contenidos
+        // en el mismo plano. Además, debe ser negativa la rotación ya que estamos
+        // rotando este vector en el sentido de las agujas del reloj.
+        Vector3 dir = rot(b[0], b[1], -(lat));
+        // Lo último que queda es rotar el azimuth. Para ello, cogemos el vector
+        // rotado colatitud radianes y lo rotamos respecto de la normal azimuth 
+        // radianes. Da igual el sentido, sea uno u otro, como rotas hasta 2π,
+        // pues te da igual.
+            dir = nor(rot(dir, n, azi));
+        
+        // Bouncing ray
+        indirect_light_contrib += cast_ray(s, Ray(x, dir), depth+1);
+
+        return (direct_light_contrib + indirect_light_contrib) * c_obj->fr() * M_PI;
     }
 
 public:
@@ -146,7 +229,6 @@ public:
             float c_dist = INFINITY;
 
             // Closest object.
-
             Object_ptr c_obj;
 
             // Calculating possible intersections in the Scene.
@@ -164,7 +246,7 @@ public:
 
     inline void path_tracing(Scene s, Vector3 cc) {
         for (auto& d : dots) {
-            color += find_path(s, Ray(cc, d - cc), 0);
+            color += cast_ray(s, Ray(cc, d - cc), 0);
         }
         color /= dots.size();
     }
@@ -218,23 +300,11 @@ public:
     }
 
     void render(Scene scene, Render type) {
-
-        std::chrono::steady_clock::time_point p;
-        if (type == RAY_TRACING) {
-            for (auto& h : grid) {
-                for (auto& w : h) {
-                    p = now();
-                    w.ray_tracing(scene, c);
-                    bar.update(std::cout, now()-p);
-                }
-            }
-        } else if (type == PATH_TRACING) {
-            for (auto& h : grid) {
-                for (auto& w : h) {
-                    p = now();
-                    w.path_tracing(scene, c);
-                    bar.update(std::cout, now()-p);
-                }
+        for (auto& h: grid) {
+            for (auto& w : h) {
+                auto p = now();
+                w.path_tracing(scene, c);
+                bar.update(std::cout, now()-p);
             }
         }
         flush_stream(std::cout);

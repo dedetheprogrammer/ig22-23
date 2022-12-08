@@ -1,6 +1,7 @@
 #!/bin/bash
 if [ "$4" == "render" ]; then 
     g++ main.cpp -g -I ../libs -O3 -pthread -Wall -std=c++11 -o path_tracer && ./path_tracer
+    if [ "$?" != 0 ]; then exit 1; fi
 fi
 if [ ! -e tone_mapper* ]; then
     g++ ../practica2/main.cpp -g -I ../libs -O3 -pthread -Wall -std=c++11 -o tone_mapper
