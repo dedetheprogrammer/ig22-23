@@ -1,5 +1,6 @@
 #pragma once
 #include <algorithm>
+#include <random>
 #include "geometry.hpp"
 #include "image.hpp"
 #include "utils.hpp"
@@ -7,7 +8,7 @@
 //===============================================================//
 // Textures
 //===============================================================//
-struct Texture_ref {
+/*struct Texture_ref {
     
     // Texture start reference.
     Vector3 p;
@@ -54,10 +55,118 @@ public:
         }
     }
 
-};
+};*/
 
 //===============================================================//
-// Directional light.
+// Materials
+//===============================================================//
+
+class Material {
+private:
+
+    void coefficient_correction() {
+        float coeff = pd + ps + pt;
+        if (coeff - 1 > EPSILON_ERROR) {
+            pd /= coeff;
+            ps /= coeff;
+            pt /= coeff;
+        }
+    }
+
+public:
+    // Lambertian diffuse parameters.
+    RGB kd;   // Lambertian diffuse coefficient.
+    float pd; // Lambertian diffuse probability.
+
+    // Perfect specular reflectance parameters.
+    RGB ks;   // Perfect specular reflectante coefficient.
+    float ps; // Perfect specular reflectance probability.
+
+    // Perfect refrectation parameters.
+    RGB kt;   // Perfect refrectation coefficient.
+    float pt; // Perfect refrectation probability.
+
+    Material(RGB kd = RGB(185), RGB ks = RGB(0), RGB kt = RGB(0)) {
+
+        // Lambertian diffuse parameters.
+        this->kd = kd;
+        this->pd = max(kd);
+
+        // Perfect specular reflectance parameters.
+        this->ks = ks;
+        this->ps = max(ks);
+
+        // Perfect refrectation parameters.
+        this->kt = kt;
+        this->pt = max(kt);
+
+        // Coefficients correction.
+        coefficient_correction();
+    }
+
+    Vector3 scattering(const Vector3& n) {
+
+        // Russian roulette event.
+        float rr_event = E(e2);
+
+        // Lambertian diffuse event.
+        if (rr_event <= pd) {
+
+            float lat = acos(sqrt(1 - E(e2))); // SE GENERAN COMO RADIANES
+            float azi = 2*M_PI*E(e2);          // LO HE COMPROBADO.
+            // EXPLICACIÓN DEL NUEVO RAYO GENERADO: 
+            // 1. Utilizando una matriz de cambio de base y/o las propiedades 
+            //    trigonometricas para pasar de polares a cartesianas daría malos
+            //    resultados porque estas propiedades se basan suponiendo que 
+            //    nuestro vector esta alineado a los ejes cartesianos.
+            // 2. Coge por ejemplo sin(lat) * cos(azi), sabemos que el seno calcula
+            //    el cateto opuesto y el coseno el contiguo, si tu vector es paralelo
+            //    al eje Y, la componente x del nuevo vector si es sin(lat) * cos(azi).
+            //    Pero si tu vector es paralelo al eje x, es la componente y quien debería
+            //    tener el valor sin(lat) * cos(azi). Esto hace que en todos los puntos de
+            //    intersección la hemiesfera este alineada al eje Y, por eso hay rayos
+            //    que se generan detras de la pared al rotarlos.
+            // 3. Usar esto nos hace totalmente dependientes de los ejes, por lo que 
+            //    he hecho un truquito de magia para que la rotación sea correcta.
+            //
+            // GENERAMOS UNA BASE ORTONORMAL RESPECTO DE LA NORMAL OBTENIDA.
+            // Se devuelven los dos vectores restantes que conforman la base ortonormal.
+            std::vector<Vector3> b = orthonormal_basis(n);
+            // Ahora, lo que hacemos es rotar uno de estos dos vectores respecto del 
+            // otro no la latitud sino la colatitud, ya que los dos estan contenidos
+            // en el mismo plano. Además, debe ser negativa la rotación ya que estamos
+            // rotando este vector en el sentido de las agujas del reloj.
+            Vector3 dir = rot(b[0], b[1], -((M_PI/2) - lat));
+            // Lo último que queda es rotar el azimuth. Para ello, cogemos el vector
+            // rotado colatitud radianes y lo rotamos respecto de la normal azimuth 
+            // radianes. Da igual el sentido, sea uno u otro, como rotas hasta 2π,
+            // pues te da igual.
+            return nor(rot(dir, n, azi));
+
+        } 
+        // Perfect specular reflectance event (NOT IMPLEMENTED YET).
+        else if (rr_event > pd && rr_event <= ps) {
+            return Vector3();
+        }
+        // Perfect refrectation event (NOT IMPLEMENTED YET).
+        else if (rr_event > ps && rr_event <= pt) {
+            return Vector3();
+        }
+        // Ray death.
+        else {
+            return Vector3();
+        }
+    }
+
+};
+
+std::ostream& operator<<(std::ostream& os, const Material& m) {
+    return os << "[ kd: " << m.kd << ", ks: " << m.ks << ", kt: " << m.kt << "]";
+}
+
+
+//===============================================================//
+// Point light
 //===============================================================//
 class Light {
 private:
@@ -80,24 +189,26 @@ private:
                                                        // objeto.
 public:
     // Object info.
-    RGB kd;
+    Material m;
+
+    Object(Material m = Material()) : m(m) {}
 
     // Texture things.
-    Texture t; // Object texture.
-    bool has_texture;
-
-    Object(Texture t) : t(t), has_texture(true) {}
-    Object(RGB kd = RGB(0,0,0)) : kd(kd), has_texture(false) {}
+    // Texture t; // Object texture.
+    // bool has_texture;
+    //Object() : m(Material(RGB(185), RGB(0), RGB(0))), has_texture(false) {}
+    // Object(Texture t) : t(t), has_texture(true) {}
+    // Object(Material m) : m(m), has_texture(false) {}
     virtual ~Object() = default; // Por alguna razón, el compilador de C++ necesita un
                                  // destructor virtual, no hace absolutamente nada, pero
                                  // no toca los huevos.
-                                 
-    virtual RGB get_kd() { return kd; }
-    RGB fr() const { return kd/M_PI; }
+    
+    RGB fr(Vector3 x, Vector3 wi, Vector3 wo) const {
+        return m.kd/M_PI;
+    }
 
     virtual std::vector<float> intersects(const Ray& ray) = 0;
-    virtual Vector3 normal(Vector3 p, Vector3 wi) = 0;
-
+    virtual Vector3 normal(Vector3 p, Vector3 wi) = 0;  //wi es el vector del rayo incidente
 
     friend std::ostream& operator<<(std::ostream& os, Object& p) {
         return p.print(os);
@@ -115,21 +226,21 @@ private:
         return os << "PLANE {"
             << "\n  normal: "   << n 
             << "\n  distance: " << D 
-            << "\n  kd: " << kd
             << "\n  finite plane bounds: " << b
-            << "\n  texture reference: " << t_ref
+            << "\n  material: " << m
+            //<< "\n  texture reference: " << t_ref
             << "\n}";
     }
 
-    // Texture things.
-    std::vector<Vector3> t_ref; // Texture start reference and orientation.
-                                //  - 0: reference point.
-                                //  - 1: texture geometrical height;
-                                //  - 2: texture geometrical width;
-    //int qi, qj; // Index of the texture quad that has been intersected.
-    float qw, qh; // Width and height of a single quad.
-    float tw, th; // Width and height of the texture.
-    RGB q_color;  // Color of the texture quad that has been intersected.
+    //// Texture things.
+    //std::vector<Vector3> t_ref; // Texture start reference and orientation.
+    //                            //  - 0: reference point.
+    //                            //  - 1: texture geometrical height;
+    //                            //  - 2: texture geometrical width;
+    ////int qi, qj; // Index of the texture quad that has been intersected.
+    //float qw, qh; // Width and height of a single quad.
+    //float tw, th; // Width and height of the texture.
+    //RGB q_color;  // Color of the texture quad that has been intersected.
 
 public:
     // Geometrical things
@@ -145,10 +256,13 @@ public:
     // ==========================
 
     // Solid color plane defined by a normal and its distance to the origin.
-    Plane(float D, Vector3 n, RGB kd = RGB(185,185,185)) : Object(kd), D(D), n(nor(n)) {}
+    Plane(float D, Vector3 n, Material m = Material())
+        : Object(m), D(D), n(nor(n)) {}
 
     // Plane defined by a normal and a plane contained point with solid color.
-    Plane(Vector3 p, Vector3 n, RGB kd = RGB(185,185,185)) : Object(kd) {
+    Plane(Vector3 p, Vector3 n, Material m = Material())
+        : Object(m)
+    {
         this->n = nor(n);
         this->D = -this->n*p;
     }
@@ -159,6 +273,7 @@ public:
     //  - tw and th are the texture geometrical width and height.
     //  - r is the rotation of the texture.
     //  - o is the orientation (positive or negative).
+    /*
     Plane(float D, Vector3 n, Texture t, Texture_ref r, float tw, float th)
         : Object(t), tw(tw), th(th), D(D)
     {
@@ -173,22 +288,22 @@ public:
         qw = tw/t.width;
         qh = th/t.height;
     }
+    */
 
     // ==========================
     // Finite plane constructors
     // ==========================
+    Plane(float D, std::vector<Vector3> b, Material m = Material())
+        : Object(m), D(D), n(nor(crs(b[1]-b[0], b[3]-b[0]))), b(b) {}
 
-    Plane(float D, std::vector<Vector3> b, RGB kd = RGB(185,185,185)) : Object(kd), D(D), b(b) {
-        // Geometrical things.
-        this->n = nor(crs(b[1]-b[0], b[3]-b[0]));
-    }
-
-    Plane(std::vector<Vector3> b, RGB kd = RGB(185,185,185)) : Object(kd), b(b) {
-        // Geometrical things.
+    Plane(std::vector<Vector3> b, Material m = Material())
+        : Object(m), b(b)
+    {
         this->n = nor(crs(b[1]-b[0], b[3]-b[0]));
         this->D = -n*b[0];
     }
 
+    /*
     Plane(std::vector<Vector3> b, Texture t, Texture_ref r) : Object(t), b(b) {
         // Geometrical things.
         n = nor(crs(b[1]-b[0], b[3]-b[0]));
@@ -203,15 +318,11 @@ public:
         qw = tw/t.width;
         qh = th/t.height;
     }
-
-    RGB get_kd() override {
-        if (!has_texture) return kd;
-        else return q_color;
-    }
+    */
 
     std::vector<float> intersects(const Ray& r) override {
 
-        if (n*r.d == 0.f) return {};     // Si la división es 0 no hay corte.
+        if (n*r.d == 0.f) return {};     // Si la division es 0 no hay corte.
         float ts = -(n*r.p + D)/(n*r.d); // Calcula la distancia desde el
                                          //   centro del rayo hasta el punto de corte.
         
@@ -225,8 +336,9 @@ public:
                 return {};
             }        
         }
-        
+
         // Texture things.
+        /*
         if (has_texture) {
             p -= t_ref[0];
             // Obtaining proportional width and height.
@@ -246,7 +358,7 @@ public:
             if (t.quads[qi][qj].alpha) return {};
 
             q_color = t.quads[qi][qj].color;
-        }
+        }*/
         return {ts}; // Devolver la distancia al punto de corte.
     }
 
@@ -266,14 +378,14 @@ private:
         return os << "SPHERE {"
             << "\n  center: "   << c
             << "\n  radius: "   << r 
-            << "\n  kd: " << kd
+            << "\n  material: " << m
             << "\n}";
     }
 public:
     Vector3 c;
     float r;
 
-    Sphere(Vector3 c = Vector3(), float r = 1.0, RGB kd = RGB()) : Object(kd), c(c), r(r) {}
+    Sphere(Vector3 c, float r, Material m = Material()) : Object(m), c(c), r(r) {}
 
     std::vector<float> intersects(const Ray& ray) override {
         float a, b, c_, q, x0, x1; Vector3 L;
@@ -307,7 +419,7 @@ private:
     std::ostream& print(std::ostream& os) override {
         return os << "BOX {"
             << "\n  bounds: "   << bounds
-            << "\n  kd: " << kd
+            << "\n  material: " << m
             << "\n}";
     }
 public:
@@ -315,10 +427,11 @@ public:
     Vector3 center;
 
     Box() {}
-    Box(std::vector<Vector3> bounds)
+    Box(std::vector<Vector3> bounds, Material m = Material())
         : bounds(bounds), center((bounds[1] - bounds[0])/2) {}
-    Box(Vector3 min, Vector3 max, RGB kd = RGB(185,185,185))
-        : Object(kd), bounds({ min, max }), center( (max-min)/2) {}
+
+    Box(Vector3 min, Vector3 max, Material m = Material())
+        : Object(m), bounds({ min, max }), center( (max-min)/2) {}
 
     std::vector<float> intersects(const Ray& ray) override {
 
@@ -363,16 +476,15 @@ private:
     std::ostream& print(std::ostream& os) override {
         return os << "TRIANGLE {" 
             << "\n vertex: "   << v 
-            << "\n kd: " << kd
+            << "\n material: " << m
             << "\n}";
     }
 public:
     std::vector<Vector3> v; // Triangle vertex.
 
     Triangle() {}
-    Triangle(std::vector<Vector3> v, RGB kd = RGB(185,185,185)) 
-        : Plane(v[0], crs(v[1]-v[0], v[2]-v[0]), kd), v(v) {
-    }
+    Triangle(std::vector<Vector3> v, Material m = Material()) 
+        : Plane(v[0], crs(v[1]-v[0], v[2]-v[0]), m), v(v) {}
 
     std::vector<float> intersects(const Ray& r) override {
         std::vector<float> t;
@@ -393,7 +505,7 @@ private:
     std::ostream& print(std::ostream& os) override {
         return os << "MESH {"
             << "\n  faces: "        << faces
-            << "\n  kd: "     << kd
+            << "\n  material: "     << m
             << "\n  box collider: " << collider
             << "\n}";
     }
@@ -407,7 +519,7 @@ public:
     Triangle q_dot;
     std::vector<Triangle> faces;
 
-    Mesh(std::vector<Triangle> faces) : Object(RGB(185,185,185)), collider(Vector3(INFINITY, INFINITY, INFINITY), 
+    Mesh(std::vector<Triangle> faces) : collider(Vector3(INFINITY, INFINITY, INFINITY), 
         Vector3(-INFINITY, -INFINITY, -INFINITY)), faces(faces)
     {   
         for (auto& f : faces) {
@@ -422,7 +534,7 @@ public:
         }
     }
 
-    Mesh(std::string ply_file) : Object(RGB(185,185,185)), 
+    Mesh(std::string ply_file, Material m = Material()) : Object(m), 
         collider(Vector3(INFINITY, INFINITY, INFINITY), Vector3(-INFINITY, -INFINITY, -INFINITY))
     {
         std::string s("");
@@ -459,16 +571,8 @@ public:
         int n, v1, v2, v3;
         for (auto& f : faces) {
             in >> n >> v1 >> v2 >> v3;
-            f = Triangle({vertex[v1], vertex[v2], vertex[v3]}, kd);
+            f = Triangle({vertex[v1], vertex[v2], vertex[v3]}, m);
         }
-    }
-
-    RGB get_kd() override {
-        return q_dot.kd;
-    }
-
-    RGB get_reflectance() const {
-        return q_dot.kd/M_PI; 
     }
 
     std::vector<float> intersects(const Ray& r) override {
@@ -508,7 +612,7 @@ Mesh operator*(Mesh m, Matrix3 transform) {
             b[1].y = std::max(v.y, b[1].y);
             b[1].z = std::max(v.z, b[1].z);
         }
-        f = Triangle(f.v, f.kd);
+        f = Triangle(f.v, f.m);
     }
     m.collider.bounds = b;
     return m;

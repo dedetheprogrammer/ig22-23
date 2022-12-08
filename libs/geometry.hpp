@@ -38,6 +38,7 @@ private:
     }
 
 public:
+
     float x, y, z, h;
 
     Vector3 (float x = 0, float y = 0, float z = 0)
@@ -75,6 +76,7 @@ public:
         y -= v.y;
         z -= v.z;
     }
+
 };
 
 // Vector add.
@@ -232,7 +234,7 @@ class Matrix3 {
 private:
 
     // Coeficient matrix.
-    void cof3(float A[N][N], float temp[N][N], int row, int col, int n) { 
+    void cof3(float A[N][N], float temp[N][N], int row, int col, int n) {
         int i = 0, j = 0;
         for (int x = 0; x < n; x++) {
             for (int y = 0; y < n; y++) {
@@ -274,7 +276,9 @@ private:
     }
 
 public:
+
     float m[4][4]; // Matrix values.
+
     Matrix3(bool identity = true) {
         for (int i = 0; i < 4; i++) {
             for (int j = 0; j < 4; j++) m[i][j] = 0;
@@ -347,6 +351,7 @@ class Matrix3Translation : public Matrix3 {
 private:
     // ...
 public:
+
     Matrix3Translation(float translation) {
         m[0][3] = m[1][3] = m[2][3] = translation;
     }
@@ -391,6 +396,7 @@ class Matrix3Rotation : public Matrix3 {
 private:
     //float rotation;
 public:
+
     Matrix3Rotation(int flags, float degrees) {
         float r = (degrees * M_PI)/180;
         if (flags & X_ROT) {
@@ -410,6 +416,7 @@ public:
             m[1][1] =  cos(r); if (std::abs(m[1][1]) < EPSILON_ERROR) m[1][1] = 0;
         }
     }
+
 };
 
 // Ortogonal vector.

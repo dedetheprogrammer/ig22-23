@@ -30,16 +30,20 @@
 *.exe
 *.out
 *.app
-*.vscode*
-*.dSYM
-*ppm
-*png
-*ply
-*.DS_Store
-*.vs*
 *main
 *ftl_simulator
 *ray_tracer
 *tone_mapper
 *path_tracer
 
+# Images
+*ppm
+*png
+*ply
+
+# Depuration
+*.dSYM
+*.vs*
+
+# Other
+*.DS_Store

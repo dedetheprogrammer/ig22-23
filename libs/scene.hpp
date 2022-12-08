@@ -9,15 +9,6 @@
 #include "geometry.hpp"
 #include "objects.hpp"
 
-// TODO:
-// - RGB luminance.
-// - Import indirect light.
-// - Start looking into photon mapping.
-// - Threading.
-// - Implement kd-tree algorythm.
-// - 3d meshes textures.
-// - Normal mapping.
-
 //===============================================================//
 // Scene: a set of objects and lights.
 //===============================================================//
@@ -27,16 +18,18 @@ using Light_ptr  = std::shared_ptr<Light>;
 using Objects    = std::vector<std::shared_ptr<Object>>;
 using Lights     = std::vector<std::shared_ptr<Light>>;
 
-std::mutex m;
-std::random_device rd;
-std::mt19937 e2(rd());
-
 class Scene {
 private:
     // ...
 public:
-    Objects objects; // Scene objects.
-    Lights  lights;  // Scene lights.
+    // Scene cameras.
+    //std::vector<Camera> cameras; 
+    
+    // Scene objects.
+    Objects objects;
+
+    // Scene lights.        
+    Lights  lights;
 
     Scene() {}
     Scene(Objects objects, Lights lights) : objects(objects), lights(lights) {}
@@ -47,87 +40,14 @@ public:
 // Pixel: the elemental of the grid.
 //===============================================================//
 
-bool once = true;
 #define BIAS 0.001f
-#define MAX_DEPTH 2
+#define MAX_DEPTH 1
 
 class Pixel {
 private:
 
-    // Render equation.
-    /*inline RGB RenderEquation(Object_ptr c_obj, Vector3 casted_dir, RGB pow, Ray light_ray, float l_mod) {
-        Vector3 n = c_obj->normal(light_ray.p, casted_dir);
-        //     Incoming light:         BDRF:         Object geometry:
-        return pow / (l_mod * l_mod) * c_obj->fr() * std::abs(n * (light_ray.d / l_mod));
-    }
-
-    inline RGB find_path(Scene s, Ray r, int n_bounce = 0) {
-        RGB ret;
-        // Distance of the closest intersection point.
-        float c_dist = INFINITY;
-        // Closest object.
-        Object_ptr c_obj;
-        // Calculating possible intersections in the Scene.
-        for (auto& o : s.objects) {
-            auto vt = o->intersects(r);
-            if (vt.size() > 0 && vt[0] > 0 && (vt[0] < c_dist)) {
-                c_dist = vt[0];
-                c_obj  = o;
-            }
-        }
-        if (c_obj != nullptr) {
-            Vector3 x = r.d * c_dist + r.p;
-            RGB lDir = direct_light(s, r, c_obj, x);
-            ret += lDir;
-            if (n_bounce < MAX_BOUNCES) {
-                ret += indirect_light(s, r, c_obj, x, n_bounce);
-            }
-            ret *= c_obj->fr();
-        }
-        return ret;
-    }
-
-    // Direct light renderization.
-    inline RGB direct_light(const Scene& s, Ray r, Object_ptr c_obj, Vector3 x) {
-        
-        RGB dl_color;
-        for (auto& l : s.lights) {
-        
-            Ray lr(x, l->c - x);
-            float l_mod = lr.d.mod();
-            if (l_mod == 0) continue;
-
-            bool collides = false;
-            for (auto& o : s.objects) {
-                for (auto& t : o->intersects(lr)) {
-                    if (t > BIAS && t < 1) {
-                        collides = true;
-                        break;
-                    }
-                }
-            }
-            if (collides) continue;
-            dl_color += RenderEquation(c_obj, r.d, l->pow, lr, l_mod);
-        }
-        return dl_color;
-    }
-
-    // Indirect light renderization.
-    inline RGB indirect_light(Scene& s, Ray r, Object_ptr c_obj, Vector3 x, int n_bounce) {
-
-        std::uniform_real_distribution<> E(0, 1);
-        float lat = acos(sqrt(1 - E(e2)));
-        float azi = 2*M_PI*E(e2);
-
-        std::vector<Vector3> b = orthonormal_basis(nor(c_obj->normal(x, r.d)));
-        Vector3 dir = Matrix3BaseChange(b[1], b[0], b[2], x) * 
-            Vector3(sin(lat) * cos(azi), sin(lat) * sin(azi), cos(lat));
- 
-        // Bouncing ray
-        return find_path(s, Ray(x, dir), n_bounce+1) * M_PI;
-    }*/
-
     RGB cast_ray(Scene& s, Ray r, int depth) {
+
         if (depth > MAX_DEPTH) return RGB();
 
         RGB direct_light_contrib, indirect_light_contrib;
@@ -165,49 +85,21 @@ private:
             }
             if (collides) continue;
 
-            direct_light_contrib +=
+            direct_light_contrib += 
                 (l->pow / (l_mod * l_mod)) *
-                /*(c_obj->fr()) **/
+                /*c_obj->fr() **/
                 std::abs(n * (lr.d / l_mod));
         }
 
         // Compute indirect light.
-        std::uniform_real_distribution<> E(0, 1);
-        float lat = acos(sqrt(1 - E(e2))); // SE GENERAN COMO RADIANES
-        float azi = 2*M_PI*E(e2);          // LO HE COMPROBADO.
-        // EXPLICACIÓN DEL NUEVO RAYO GENERADO: 
-        // 1. Utilizando una matriz de cambio de base y/o las propiedades 
-        //    trigonometricas para pasar de polares a cartesianas daría malos
-        //    resultados porque estas propiedades se basan suponiendo que 
-        //    nuestro vector esta alineado a los ejes cartesianos.
-        // 2. Coge por ejemplo sin(lat) * cos(azi), sabemos que el seno calcula
-        //    el cateto opuesto y el coseno el contiguo, si tu vector es paralelo
-        //    al eje Y, la componente x del nuevo vector si es sin(lat) * cos(azi).
-        //    Pero si tu vector es paralelo al eje x, es la componente y quien debería
-        //    tener el valor sin(lat) * cos(azi). Esto hace que en todos los puntos de
-        //    intersección la hemiesfera este alineada al eje Y, por eso hay rayos
-        //    que se generan detras de la pared al rotarlos.
-        // 3. Usar esto nos hace totalmente dependientes de los ejes, por lo que 
-        //    he hecho un truquito de magia para que la rotación sea correcta.
-        //
-        // GENERAMOS UNA BASE ORTONORMAL RESPECTO DE LA NORMAL OBTENIDA.
-        // Se devuelven los dos vectores restantes que conforman la base ortonormal.
-        std::vector<Vector3> b = orthonormal_basis(n);
-        // Ahora, lo que hacemos es rotar uno de estos dos vectores respecto del 
-        // otro no la latitud sino la colatitud, ya que los dos estan contenidos
-        // en el mismo plano. Además, debe ser negativa la rotación ya que estamos
-        // rotando este vector en el sentido de las agujas del reloj.
-        Vector3 dir = rot(b[0], b[1], -(lat));
-        // Lo último que queda es rotar el azimuth. Para ello, cogemos el vector
-        // rotado colatitud radianes y lo rotamos respecto de la normal azimuth 
-        // radianes. Da igual el sentido, sea uno u otro, como rotas hasta 2π,
-        // pues te da igual.
-            dir = nor(rot(dir, n, azi));
-        
-        // Bouncing ray
-        indirect_light_contrib += cast_ray(s, Ray(x, dir), depth+1);
+        // Bouncing ray. Now the direction depends on the material properties:
+        //  - Uniform cousine sample.
+        //  - Reflection.
+        //  - Refraction.
+        Vector3 new_dir = c_obj->m.scattering(n); 
+        indirect_light_contrib += cast_ray(s, Ray(x, new_dir), depth+1);
 
-        return (direct_light_contrib + indirect_light_contrib) * c_obj->fr() * M_PI;
+        return (direct_light_contrib + indirect_light_contrib) * c_obj->fr(Vector3(), Vector3(), Vector3()) * M_PI;
     }
 
 public:
@@ -239,7 +131,7 @@ public:
                     c_obj = o;
                 }
             }
-            color += c_obj->get_kd();
+            color += c_obj->m.kd;
         }
         color /= dots.size();
     }

@@ -8,14 +8,21 @@
 #include <thread>
 #include <vector>
 
+//===============================================================//
+// Random
+//===============================================================//
+std::random_device rd;
+std::mt19937 e2(rd());
+std::uniform_real_distribution<> E(0,1);
 
 //===============================================================//
 // Threading
 //===============================================================//
+std::mutex m;
+
 class threader {
 private:
     int N_THREADS;
-    std::mutex m;
 public:
     std::vector<std::thread> THREADS;
 

@@ -19,8 +19,11 @@ private:
     // ...
 public:
     float R, G, B;
+    RGB() : R(0), G(0), B(0) {}
+    RGB(int C) : R(C/255.0), G(C/255.0), B(C/255.0) {}
     RGB(int R, int G, int B) : R(R/255.0), G(G/255.0), B(B/255.0) {}
-    RGB(float R = 0.0, float G = 0.0, float B = 0.0) : R(R), G(G), B(B) {}
+    RGB(float C) : R(C), G(C), B(C) {}
+    RGB(float R, float G, float B) : R(R), G(G), B(B) {}
 
     void operator=(const int i) {
         R = G = B = float(i)/255.0;
@@ -83,6 +86,13 @@ RGB operator^(const RGB& pixel, const float d) {
 
 bool operator==(const RGB& a, const RGB& b) {
     return a.R == b.R && a.G == b.G && a.B == b.B;
+}
+
+float max(const RGB& pixel) {
+    float max = pixel.R;
+    if (max < pixel.G) max = pixel.G;
+    if (max < pixel.B) max = pixel.B;
+    return max;
 }
 
 void operator>>(std::istream& is, RGB& pixel) {
