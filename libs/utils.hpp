@@ -3,6 +3,7 @@
 #include <fstream>
 #include <iterator>
 #include <mutex>
+#include <random>
 #include <regex>
 #include <string>
 #include <thread>
@@ -171,17 +172,22 @@ std::string get_filename(std::string path) {
 //===============================================================//
 // Progress bar
 //===============================================================//
-std::string elapsed_time(std::chrono::seconds s) {
-    auto m = std::chrono::duration_cast<std::chrono::minutes>(s); s -= m;
-    auto h = std::chrono::duration_cast<std::chrono::hours>  (s); s -= h;
-    std::string result("");
 
+// Elapsed time.
+
+std::string elapsed_time(std::chrono::seconds s) {
+
+    auto h = std::chrono::duration_cast<std::chrono::hours>  (s); s -= h;
+    auto m = std::chrono::duration_cast<std::chrono::minutes>(s); s -= m;
+
+    std::string result("");
     if (h < std::chrono::hours(10))   result += "0";
     result += std::to_string(h/std::chrono::hours(1)) + ":";
     if (m < std::chrono::minutes(10)) result += "0";
     result += std::to_string(m/std::chrono::minutes(1)) + ":";
     if (s < std::chrono::seconds(10)) result += "0";
     return result + std::to_string(s/std::chrono::seconds(1));
+
 }
 
 void flush_stream(std::ostream& os) {
@@ -232,18 +238,17 @@ public:
 
     void update(std::ostream& os, std::chrono::nanoseconds time) {
 
-        float progress  = ((float) ++c_progress / (float)t_progress);
+        double progress  = ((double) ++c_progress / (double)t_progress);
 
-        /*
         auto n = now();
         if (std::chrono::duration_cast<std::chrono::milliseconds>(n - p) > update_t) {
             p = n;
             time *= (t_progress - c_progress);
             eta = elapsed_time(std::chrono::duration_cast<std::chrono::seconds>(time));
-        }*/
+        }
 
         int pos = bar_width * progress;
-        std::string s_bar(/*"ETA: " + eta + */" [");
+        std::string s_bar("ETA: " + eta + " [");
         for (int i = 0; i < bar_width; ++i) {
             if (i < pos) s_bar += style[0];
             else if (i == pos) s_bar += style[1];

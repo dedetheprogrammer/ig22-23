@@ -9,7 +9,7 @@
     #define M_PI 3.14159265358979323846
 #endif
 #define N 4
-#define EPSILON_ERROR 0.0000001
+#define EPSILON_ERROR 0.000001
 
 enum Rotation { X_ROT = 0x1, Y_ROT = 0x2, Z_ROT = 0x4 };
 
@@ -39,19 +39,19 @@ private:
 
 public:
 
-    float x, y, z, h;
+    double x, y, z, h;
 
-    Vector3 (float x = 0, float y = 0, float z = 0)
+    Vector3 (double x = 0, double y = 0, double z = 0)
         : x(x), y(y), z(z), h(0) { clean(); }
-    Vector3 (float x, float y, float z, int h)
+    Vector3 (double x, double y, double z, int h)
         : x(x), y(y), z(z), h(h) { clean(); }
     Vector3 (Vector3 v, int h)
         : x(v.x), y(v.y), z(v.z), h(h) { clean(); }
-    Vector3 (float m[4])
+    Vector3 (double m[4])
         : x(m[0]), y(m[1]), z(m[2]), h(m[3]) { clean(); }
 
     // Vector module
-    float mod() const {
+    double mod() const {
         return sqrt((x * x) + (y * y) + (z * z));
     }
 
@@ -77,6 +77,12 @@ public:
         z -= v.z;
     }
 
+    void operator*=(double d) {
+        x *= d;
+        y *= d;
+        z *= d; 
+    }
+
 };
 
 // Vector add.
@@ -95,22 +101,22 @@ Vector3 operator-(Vector3 v) {
 }
 
 // Vector dot product.
-float operator*(Vector3 v, Vector3 w) {
+double operator*(Vector3 v, Vector3 w) {
     return (v.x * w.x) + (v.y * w.y) + (v.z * w.z) + (v.h * w.h);
 }
 
 // Vector scalar product.
-Vector3 operator*(Vector3 v, float r) {
+Vector3 operator*(Vector3 v, double r) {
     return Vector3(v.x * r, v.y * r, v.z * r);
 }
 
 // Vector scalar product.
-Vector3 operator*(float r, Vector3 v) {
+Vector3 operator*(double r, Vector3 v) {
     return v * r;
 }
 
 // Vector scalar division.
-Vector3 operator/(Vector3 v, float r) {
+Vector3 operator/(Vector3 v, double r) {
     return Vector3(v.x/r, v.y/r, v.z/r);
 }
 
@@ -128,12 +134,12 @@ inline Vector3 abs(Vector3 v) {
 }
 
 // Angle between two vectors in radians.
-float rad(Vector3 v, Vector3 w) {
+double rad(Vector3 v, Vector3 w) {
     return acos((v * w)/(v.mod() * w.mod()));
 }
 
 // Angle between two vectors in grades.
-float grd(Vector3 v, Vector3 w) {
+double grd(Vector3 v, Vector3 w) {
     return rad(v, w) * (180/M_PI);
 }
 
@@ -150,7 +156,7 @@ bool operator!=(Vector3 v, Vector3 w) {
 }
 
 // Direction normalization. By default, it normalize to the unitary value.
-Vector3 nor(Vector3 v, float mod = 1.0) {
+Vector3 nor(Vector3 v, double mod = 1.0) {
     return v * mod/v.mod();
 }
 
@@ -165,15 +171,15 @@ Vector3 crs(Vector3 v, Vector3 w) {
 
 // How to rotate a vector in reference to other vector. Rotating a respect of b.
 // https://math.stackexchange.com/questions/511370/how-to-rotate-one-vector-about-another
-Vector3 rot(Vector3 a, Vector3 b, float r = M_PI/2) {
+Vector3 rot(Vector3 a, Vector3 b, double r = M_PI/2) {
 
     Vector3 abb = ((a*b)/(b*b))*b; // a component in the direction of b.
     Vector3 abp = a - abb;         // a component in the direction orthogonal to b.
     Vector3 w = crs(b, abp);       // w component, orthogonal to a and b.
 
-    float abp_m = abp.mod();
-    float x1 = cos(r)/abp_m;
-    float x2 = sin(r)/abp_m;
+    double abp_m = abp.mod();
+    double x1 = cos(r)/abp_m;
+    double x2 = sin(r)/abp_m;
     return (abp_m * (x1*abp + x2*w)) + abb;
 }
 
@@ -181,12 +187,12 @@ Vector3 rot(Vector3 a, Vector3 b, float r = M_PI/2) {
 // https://graphics.pixar.com/library/OrthonormalB/paper.pdf
 std::vector<Vector3> orthonormal_basis(const Vector3& n) {
 
-    float s = (n.z >= 0.0f ? 1.0f : -1.0f);
-    const float a = -1.0f / (s + n.z);
-    const float b = n.x * n.y * a;
+    double sign = copysignf(1.0f, n.z);
+    const double a = -1.0f / (sign + n.z);
+    const double b = n.x * n.y * a;
     return {
-        Vector3(1.0f + s * n.x * n.x * a, s * b, -s * n.x),
-        Vector3(b, s + n.y * n.y *a, -n.y)
+        Vector3(1.0f + sign * n.x * n.x * a, sign * b, -sign * n.x),
+        Vector3(b, sign + n.y * n.y *a, -n.y)
     };
 
 }
@@ -234,7 +240,7 @@ class Matrix3 {
 private:
 
     // Coeficient matrix.
-    void cof3(float A[N][N], float temp[N][N], int row, int col, int n) {
+    void cof3(double A[N][N], double temp[N][N], int row, int col, int n) {
         int i = 0, j = 0;
         for (int x = 0; x < n; x++) {
             for (int y = 0; y < n; y++) {
@@ -250,10 +256,10 @@ private:
     }
 
     // Matrix determinant.
-    float det3(float A[N][N], int n) {
+    double det3(double A[N][N], int n) {
         if (n == 1) return A[0][0];
         
-        float d = 0, temp[N][N];
+        double d = 0, temp[N][N];
         for (int f = 0; f < n; f++) {
             if (A[0][f]) {
                 cof3(A, temp, 0, f, n);
@@ -264,8 +270,8 @@ private:
     }
 
     // Adjunct matrix.
-    void adj3(float A[N][N], float adj[N][N]) {
-        float temp[N][N];
+    void adj3(double A[N][N], double adj[N][N]) {
+        double temp[N][N];
         for (int i = 0; i < N; i++) {
             for (int j = 0; j < N; j++) {
                 cof3(A, temp, i, j, N);
@@ -277,7 +283,7 @@ private:
 
 public:
 
-    float m[4][4]; // Matrix values.
+    double m[4][4]; // Matrix values.
 
     Matrix3(bool identity = true) {
         for (int i = 0; i < 4; i++) {
@@ -287,7 +293,7 @@ public:
             for (int i = 0; i < 4; i++) m[i][i] = 1;
         }
     }
-    Matrix3(float n[4][4]) {
+    Matrix3(double n[4][4]) {
         for (int i = 0; i < 4; i++) {
             for (int j = 0; j < 4; j++) {
                 m[i][j] = n[i][j];
@@ -296,10 +302,10 @@ public:
     }
     
     virtual Matrix3 invert() {
-        float det = det3(m, N);
+        double det = det3(m, N);
         if (!det) return *this;
 
-        float aux[N][N];
+        double aux[N][N];
         adj3(m, aux);
 
         for (int i = 0; i < N; i++) {
@@ -352,11 +358,11 @@ private:
     // ...
 public:
 
-    Matrix3Translation(float translation) {
+    Matrix3Translation(double translation) {
         m[0][3] = m[1][3] = m[2][3] = translation;
     }
 
-    Matrix3Translation(float tx, float ty, float tz) {
+    Matrix3Translation(double tx, double ty, double tz) {
         m[0][3] = tx;
         m[1][3] = ty;
         m[2][3] = tz;
@@ -374,11 +380,11 @@ class Matrix3Scale : public Matrix3 {
 private:
     // ...
 public:
-    Matrix3Scale(float scale) {
+    Matrix3Scale(double scale) {
         m[0][0] = m[1][1] = m[2][2] = scale;
     }
 
-    Matrix3Scale(float sx, float sy, float sz) {
+    Matrix3Scale(double sx, double sy, double sz) {
         m[0][0] = sx;
         m[1][1] = sy;
         m[2][2] = sz;
@@ -394,11 +400,11 @@ public:
 //==============================//
 class Matrix3Rotation : public Matrix3 {
 private:
-    //float rotation;
+    //double rotation;
 public:
 
-    Matrix3Rotation(int flags, float degrees) {
-        float r = (degrees * M_PI)/180;
+    Matrix3Rotation(int flags, double degrees) {
+        double r = (degrees * M_PI)/180;
         if (flags & X_ROT) {
             m[1][1] =  cos(r); if (std::abs(m[1][1]) < EPSILON_ERROR) m[1][1] = 0;
             m[1][2] = -sin(r); if (std::abs(m[1][2]) < EPSILON_ERROR) m[1][2] = 0;
@@ -428,7 +434,7 @@ Vector3 orto(Vector3 v, int flags, int sense) {
 }
 
 // Vector rotation.
-Vector3 rot(Vector3 v, int flags, std::vector<float> r) {
+Vector3 rot(Vector3 v, int flags, std::vector<double> r) {
     if (flags & X_ROT) {
         v = Matrix3Rotation(X_ROT, r[0]) * v;
         r.erase(r.begin());

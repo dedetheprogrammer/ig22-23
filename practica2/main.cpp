@@ -18,7 +18,7 @@ void help(int status = 0, std::string msg = "") {
 
 int main(int argc, char *argv[]) {
 
-    int flags = 0; float c_map = 1.0, e_map = 1.0, g_map = 2.2;
+    int flags = 0; double c_map = 1.0, e_map = 1.0, g_map = 2.2;
     bool conversion = false, ldr = false;
     std::string input, output;
     for (int s = 1; s < argc; s++) {

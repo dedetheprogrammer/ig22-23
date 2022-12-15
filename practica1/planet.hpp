@@ -29,17 +29,17 @@ public:
     Vector3 getLocalPoint(Vector3 cart_coord) {
         Vector3 v = surface_point(cart_coord - center);
 
-        float lat = acos(v.z/v.mod()) * 180/M_PI;
-        float azi = acos(v.x / (sqrt(v.x * v.x + v.y * v.y))) * 180/M_PI;
+        double lat = acos(v.z/v.mod()) * 180/M_PI;
+        double azi = acos(v.x / (sqrt(v.x * v.x + v.y * v.y))) * 180/M_PI;
         return Vector3(v.mod(), lat, azi);
     }
 
-    Vector3 getLocalPoint(float inclination, float azimuth) {
+    Vector3 getLocalPoint(double inclination, double azimuth) {
         return Vector3(equator.mod(), inclination, azimuth);
     }
 
-    Vector3 getGlobalPoint(float latitude, float azimuth) {
-        float lat_r = latitude * M_PI/180, azi_r = azimuth * M_PI/180, r = (axis/2).mod();
+    Vector3 getGlobalPoint(double latitude, double azimuth) {
+        double lat_r = latitude * M_PI/180, azi_r = azimuth * M_PI/180, r = (axis/2).mod();
         //return MatrixBaseChange3D(axis, equator, crs(axis, equator), center) * Vector3();
         return Vector3(r * sin(lat_r) * cos(azi_r), r * sin(lat_r) * sin(azi_r), r * cos(lat_r)) + center;
     }
@@ -70,7 +70,7 @@ std::istream& operator>> (std::istream& is, Planet& s) {
 
 void sphere_test() {
     Planet A(Vector3(5.0, 2.0, 0.0), Vector3(1.0,1.0,1.0), Vector3(2.0, 3.0, 1.0));
-    float a_lat = 45, a_azi = a_lat;
+    double a_lat = 45, a_azi = a_lat;
     Vector3 lpa = A.getLocalPoint(a_lat, a_azi), cpa = A.getGlobalPoint(45, 45);
     std::cout << A << std::endl;
     std::cout << "Latitude: " << a_lat << "º, Azimuth: " << a_azi << "º" << std::endl;

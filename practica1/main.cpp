@@ -4,7 +4,7 @@
 void geometry_test(bool verbose = false) {
     // Vector3 tests.
     std::cout << "== PRUEBA DE VECTOR3 =================" << std::endl;
-    float s = 0.5;
+    double s = 0.5;
     Vector3 a(1.0,1.0,1.0), b(5.0,4.0,4.5), d(2.0, 2.0, 2.0), v(2.0, -2.0, 0.0), w = crs(d,v);
 
     if (verbose) { std::cout << "Params: " << a << ", " << b << ", " << s << std::endl; }
@@ -21,8 +21,8 @@ void geometry_test(bool verbose = false) {
 
     // Matrices tests.
     std::cout << "== PRUEBA DE MATRICES =======================" << std::endl;
-    float A[4][4] = {{3,4,7,8},{3,2,8,7},{0,2,6,7},{4,2,2,1}};
-    float B[4][4] = {{8,7,6,5},{2,4,2,1},{1,1,3,4},{7,8,9,0}};
+    double A[4][4] = {{3,4,7,8},{3,2,8,7},{0,2,6,7},{4,2,2,1}};
+    double B[4][4] = {{8,7,6,5},{2,4,2,1},{1,1,3,4},{7,8,9,0}};
 
     Matrix3 mA(A);
     Matrix3 mB(B);
@@ -100,7 +100,7 @@ int main (int argc, char* argv[]) {
     // Si hay sugerencia de alternativas de nombre de Matrix3, soy todo oidos.
     Planet A(Vector3(1,1,1), Vector3(0,0,0), Vector3(2,2,2)), 
         B(Vector3(1,1,1), Vector3(5,5,5), Vector3(7,7,7));
-    float latA, aziA, latB, aziB;
+    double latA, aziA, latB, aziB;
 
     // PLANET A:
     std::cout << "Welcome to the FTL Enterprises Interplanetary Simulator" << std::endl;

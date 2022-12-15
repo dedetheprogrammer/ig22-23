@@ -75,7 +75,7 @@ int main (int argc, char* argv[]) {
     };
 
     C.rayTrace(scene);
-    float colres  = 0;
+    double colres  = 0;
     auto pixels = C.getRGB(colres);
     Image i(1.0, colres * 255, pixels);
     export_image(i, "./new_scene.ppm");

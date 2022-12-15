@@ -27,7 +27,7 @@ private:
         // Closest color.
         RGB dColor;
         // Distance of the closest intersection point.
-        float closest = INFINITY;
+        double closest = INFINITY;
         // Generated ray.
         Ray r = Ray(cc, dot-cc);
 
@@ -183,7 +183,7 @@ public:
     }
 
     Channels getRGB(int& colres) {
-        float max = 0;
+        double max = 0;
         Channels colors(h, std::vector<RGB>(w));
         for (int i = 0; i < h; i++) {
             for (int j = 0; j < w; j++) {

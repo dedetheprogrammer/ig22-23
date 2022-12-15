@@ -11,11 +11,11 @@
  * @param pixel RGB tuple to get the luminance.
  * @return The RGB relative luminance.
  */
-float StandardLum(RGB pixel) {
+double StandardLum(RGB pixel) {
     return (0.2126 * pixel.R) + (0.7152 * pixel.G) + (0.0722 * pixel.B);
 }
 
-RGB StandardRGB (RGB pixel, float lum) {
+RGB StandardRGB (RGB pixel, double lum) {
     return RGB(
         (lum - 0.7152 * pixel.G - 0.0722 * pixel.B) / 0.2126,
         (lum - 0.2126 * pixel.R - 0.0722 * pixel.B) / 0.7152,
@@ -30,7 +30,7 @@ RGB StandardRGB (RGB pixel, float lum) {
  * @param pixel RGB tuple to get the luminance.
  * @return The RGB color-contrast luminance.
  */
-float ContrastLum(RGB pixel) {
+double ContrastLum(RGB pixel) {
     return (0.299 * pixel.R) + (0.587 * pixel.G) + (0.114 * pixel.B);
 }
 
@@ -41,7 +41,7 @@ float ContrastLum(RGB pixel) {
  * @param pixel RGB tuple to get the luminance.
  * @return The RGB HSP luminance.
  */
-float HSPLum(RGB pixel) {
+double HSPLum(RGB pixel) {
     return sqrt(
         pow(0.299 * pixel.R, 2) + 
         pow(0.587 * pixel.G, 2) + 
@@ -57,17 +57,17 @@ float HSPLum(RGB pixel) {
 
 
 
-void debug(Image image/*, float high*/) {
+void debug(Image image/*, double high*/) {
 
     RGB p(15989, 22769, 17304);
-    float lum = StandardLum(p);
+    double lum = StandardLum(p);
     std::cout << "Orginal: " << p;
     std::cout << "Luminance: " << lum << std::endl;
     std::cout << "Obtained: " << StandardRGB(p, lum) << std::endl;
 
     for (int h = 0; h < image.height; h++) {
         for (int w = 0; w < image.width; w++) {
-            float lum = StandardLum(image.pixels[h][w]);
+            double lum = StandardLum(image.pixels[h][w]);
             image.pixels[h][w] = StandardRGB(image.pixels[h][w], lum);
         }
     }
@@ -111,7 +111,7 @@ void gamma(Image& image, int gamma) {
 
 
 /*
-void clamp(HDRImage& hdr_img, float low, float high) {
+void clamp(HDRImage& hdr_img, double low, double high) {
     // Because of the MAX_VALUE parameter, our pixel values are MAX_VALUE times bigger
     // than the value stored, which matches the range [0..color_res] thus making the
     // calculus more confusing, so we are going to assume our low and high are on the
@@ -124,7 +124,7 @@ void clamp(HDRImage& hdr_img, float low, float high) {
 
     for (int h = 0; h < hdr_img.height; h++) {
         for (int w = 0; w < hdr_img.width; w++) {
-            float lum = RGBtolum(hdr_img.image[h][w]);
+            double lum = RGBtolum(hdr_img.image[h][w]);
             lum = (lum < low) ? 0 : lum - low;
             lum = (lum > high) ? high : lum;
             hdr_img.image[h][w] = lumtoRGB(lum, hdr_img.image[h][w]);
@@ -134,52 +134,52 @@ void clamp(HDRImage& hdr_img, float low, float high) {
     hdr_img.color_res = (high - low) * (hdr_img.color_res / hdr_img.maxval);
 }
 
-void equalize(HDR_image& hdr_img, float high) {
+void equalize(HDR_image& hdr_img, double high) {
     high = high * (hdr_img.maxval / hdr_img.color_res);
 
-    float highest = 0;
+    double highest = 0;
     //Evaluate highest luminosity
     for (int h = 0; h < hdr_img.height; h++) {
         for (int w = 0; w < hdr_img.width; w++) {
-            float lum = RGBtolum(hdr_img.image[h][w]);
+            double lum = RGBtolum(hdr_img.image[h][w]);
             highest = (lum > highest) ? lum : highest;
         }
     }
     //Now that the highest point is found, we can equalize all values
     for (int h = 0; h < hdr_img.height; h++) {
         for (int w = 0; w < hdr_img.width; w++) {
-            float lum = RGBtolum(hdr_img.image[h][w])/highest * high;
+            double lum = RGBtolum(hdr_img.image[h][w])/highest * high;
             hdr_img.image[h][w] = lumtoRGB(lum, hdr_img.image[h][w]);
         }
     }
     hdr_img.color_res = high * (hdr_img.color_res / hdr_img.maxval);
 }
 
-void equalizeANDclamp(HDR_image& hdr_img, float high) {
+void equalizeANDclamp(HDR_image& hdr_img, double high) {
     high = high * (hdr_img.maxval / hdr_img.color_res);
     for (int h = 0; h < hdr_img.height; h++) {
         for (int w = 0; w < hdr_img.width; w++) {
-            float lum = RGBtolum(hdr_img.image[h][w]) / (hdr_img.color_res * hdr_img.maxval) * high;
+            double lum = RGBtolum(hdr_img.image[h][w]) / (hdr_img.color_res * hdr_img.maxval) * high;
             hdr_img.image[h][w] = lumtoRGB(lum, hdr_img.image[h][w]);
         }
     }
     hdr_img.color_res = high * (hdr_img.color_res / hdr_img.maxval);
 }
 
-void gammaCorrection(HDR_image& hdr_img, float gamma) {
+void gammaCorrection(HDR_image& hdr_img, double gamma) {
     for (int h = 0; h < hdr_img.height; h++) {
         for (int w = 0; w < hdr_img.width; w++) {
-            float lum = pow((RGBtolum(hdr_img.image[h][w]) / (hdr_img.color_res * hdr_img.maxval)), (1.0F / gamma))
+            double lum = pow((RGBtolum(hdr_img.image[h][w]) / (hdr_img.color_res * hdr_img.maxval)), (1.0F / gamma))
                             * (hdr_img.color_res * hdr_img.maxval);
             hdr_img.image[h][w] = lumtoRGB(lum, hdr_img.image[h][w]);
         }
     }
 }
 
-void gammaRestore(HDR_image& hdr_img, float gamma) {
+void gammaRestore(HDR_image& hdr_img, double gamma) {
     for (int h = 0; h < hdr_img.height; h++) {
         for (int w = 0; w < hdr_img.width; w++) {
-            float lum = pow((RGBtolum(hdr_img.image[h][w]) / (hdr_img.color_res * hdr_img.maxval)), gamma)
+            double lum = pow((RGBtolum(hdr_img.image[h][w]) / (hdr_img.color_res * hdr_img.maxval)), gamma)
                             * (hdr_img.color_res * hdr_img.maxval);
             hdr_img.image[h][w] = lumtoRGB(lum, hdr_img.image[h][w]);
         }

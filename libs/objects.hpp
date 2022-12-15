@@ -16,12 +16,12 @@
 
     // Texture dimension.
     int r_flags;
-    std::vector<float> r_vals;
+    std::vector<double> r_vals;
 
-    Texture_ref(int r_flags, std::vector<float> r_vals)
+    Texture_ref(int r_flags, std::vector<double> r_vals)
         : point_ref(false), r_flags(r_flags), r_vals(r_vals) {}
 
-    Texture_ref(Vector3 p, int r_flags, std::vector<float> r_vals)
+    Texture_ref(Vector3 p, int r_flags, std::vector<double> r_vals)
         : p(p), point_ref(true), r_flags(r_flags), r_vals(r_vals) {}
 
 };
@@ -61,100 +61,160 @@ public:
 // Materials
 //===============================================================//
 
+struct Sample {
+
+    Vector3 wi;   // Resultant direction.
+    RGB fr;       // Color factor.
+
+    // In some materials getting the direct light doesn't make sense with the
+    // way the scattering is simulated. For example:
+    //
+    // With specularity, we redirect the direction based in the Snell's theorem,
+    // the probability that the resultant direction intersects with a point 
+    // light is practically 0 as we redirect in purpose the direction (yes,
+    // could be a light right on the direction trayectory, but the chance is 
+    // too small to take in account).
+    //
+    // Then we indicate if the d_light has to be calculated or not.
+    bool wd_light;
+
+    Sample()
+        : wi(Vector3()), fr(RGB()), wd_light(false) {}
+    Sample(Vector3 wi, RGB fr, bool wd_light)
+        : wi(wi), fr(fr), wd_light(wd_light) {}
+};
+
 class Material {
 private:
 
+    // First version before Fresnell.
     void coefficient_correction() {
-        float coeff = pd + ps + pt;
-        if (coeff - 1 > EPSILON_ERROR) {
+
+        pd = max(kd);
+        ps = max(ks);
+        pt = max(kt);
+
+        double coeff = pd + ps + pt;
+        if (coeff > 1) {
             pd /= coeff;
             ps /= coeff;
             pt /= coeff;
         }
     }
 
+    // etat = ref_index_i, etai = ref_index_o.
+
+    double fresnel_coefficients(Vector3& n, Vector3 wo, double ref_index_o, double ref_index_i) {
+        
+        if ((n * wo) > 0) {
+            n *= -1;
+            std::swap(ref_index_o, ref_index_i);
+        }
+        wo = nor(wo);
+        double ref_coef = ref_index_o/ref_index_i;
+        double cos_i = n * wo;
+        double cos_t2 = 1.0f - ref_coef * ref_coef * (1 - cos_i * cos_i);
+        if (cos_t2 < 0) {
+            ps = 1;
+            pt = 0;
+        } else {
+            double cos_t = sqrt(cos_t2);
+            double Rs = ((ref_index_i * cos_i) - (ref_index_o * cos_t))
+                / ((ref_index_i * cos_i) * (ref_index_o * cos_t));
+            double Rp = ((ref_index_o * cos_i) - (ref_index_i * cos_t))
+                / ((ref_index_o * cos_i) * (ref_index_i * cos_t));
+            ps = (Rs * Rs + Rp * Rp)/2;
+            pt = 1 - ps;
+        }
+
+        return ref_coef;
+    }
+
 public:
+
     // Lambertian diffuse parameters.
     RGB kd;   // Lambertian diffuse coefficient.
-    float pd; // Lambertian diffuse probability.
+    double pd; // Lambertian diffuse probability.
 
     // Perfect specular reflectance parameters.
     RGB ks;   // Perfect specular reflectante coefficient.
-    float ps; // Perfect specular reflectance probability.
+    double ps; // Perfect specular reflectance probability.
 
     // Perfect refrectation parameters.
     RGB kt;   // Perfect refrectation coefficient.
-    float pt; // Perfect refrectation probability.
+    double pt; // Perfect refrectation probability.
 
-    Material(RGB kd = RGB(185), RGB ks = RGB(0), RGB kt = RGB(0)) {
+    // Material emission.
+    RGB ke;
+
+    // Material refractance index.
+    double ref_index_i;
+
+    Material(RGB kd = RGB(185), RGB ks = RGB(), RGB kt = RGB(), RGB ke = RGB(), double ref_index_i = 0) {
 
         // Lambertian diffuse parameters.
         this->kd = kd;
-        this->pd = max(kd);
-
         // Perfect specular reflectance parameters.
         this->ks = ks;
-        this->ps = max(ks);
-
         // Perfect refrectation parameters.
         this->kt = kt;
-        this->pt = max(kt);
+        // Material emission.
+        this->ke = ke;
+
+        // Material refraction index.
+        this->ref_index_i = ref_index_i;
 
         // Coefficients correction.
         coefficient_correction();
+
     }
+    // etat = ref_index_i, etai = ref_index_o.
+    Sample scattering(Vector3 n, Vector3 wo = Vector3(), double ref_index_o = 1) {
 
-    Vector3 scattering(const Vector3& n) {
+        // Russian roulette event generator.
+        double rr_event = E(e2);
 
-        // Russian roulette event.
-        float rr_event = E(e2);
+        // Fresnel coefficients evaluation:
+        // double ref_coef = fresnel_coefficients(n, wo, ref_index_o, ref_index_i);
 
-        // Lambertian diffuse event.
-        if (rr_event <= pd) {
+        // Lambertian diffuse event:
+        if (pd > 0 && rr_event < pd) {
 
-            float lat = acos(sqrt(1 - E(e2))); // SE GENERAN COMO RADIANES
-            float azi = 2*M_PI*E(e2);          // LO HE COMPROBADO.
-            // EXPLICACIÓN DEL NUEVO RAYO GENERADO: 
-            // 1. Utilizando una matriz de cambio de base y/o las propiedades 
-            //    trigonometricas para pasar de polares a cartesianas daría malos
-            //    resultados porque estas propiedades se basan suponiendo que 
-            //    nuestro vector esta alineado a los ejes cartesianos.
-            // 2. Coge por ejemplo sin(lat) * cos(azi), sabemos que el seno calcula
-            //    el cateto opuesto y el coseno el contiguo, si tu vector es paralelo
-            //    al eje Y, la componente x del nuevo vector si es sin(lat) * cos(azi).
-            //    Pero si tu vector es paralelo al eje x, es la componente y quien debería
-            //    tener el valor sin(lat) * cos(azi). Esto hace que en todos los puntos de
-            //    intersección la hemiesfera este alineada al eje Y, por eso hay rayos
-            //    que se generan detras de la pared al rotarlos.
-            // 3. Usar esto nos hace totalmente dependientes de los ejes, por lo que 
-            //    he hecho un truquito de magia para que la rotación sea correcta.
-            //
-            // GENERAMOS UNA BASE ORTONORMAL RESPECTO DE LA NORMAL OBTENIDA.
-            // Se devuelven los dos vectores restantes que conforman la base ortonormal.
+            double lat = acos(sqrt(1 - E(e2))); // SE GENERAN COMO RADIANES
+            double azi = 2*M_PI*E(e2);          // LO HE COMPROBADO.
+            // Orthonormal basis:
             std::vector<Vector3> b = orthonormal_basis(n);
-            // Ahora, lo que hacemos es rotar uno de estos dos vectores respecto del 
-            // otro no la latitud sino la colatitud, ya que los dos estan contenidos
-            // en el mismo plano. Además, debe ser negativa la rotación ya que estamos
-            // rotando este vector en el sentido de las agujas del reloj.
-            Vector3 dir = rot(b[0], b[1], -((M_PI/2) - lat));
-            // Lo último que queda es rotar el azimuth. Para ello, cogemos el vector
-            // rotado colatitud radianes y lo rotamos respecto de la normal azimuth 
-            // radianes. Da igual el sentido, sea uno u otro, como rotas hasta 2π,
-            // pues te da igual.
-            return nor(rot(dir, n, azi));
+            // New direction sampling:
+            Vector3 dir = Matrix3BaseChange(b[0],b[1], n, Vector3())
+                * Vector3(sin(lat)*cos(azi), sin(lat)*sin(azi), cos(lat));
+            return Sample(dir, kd/pd, true);
+        }
+        // Perfect specular reflectance event:
+        else if (ps > 0 && rr_event < (pd + ps)) {
+            return Sample(wo - ((2*n)*(wo*n)), ks/ps, false);
+        }
+        // Perfect refrectation event:
+        // - https://graphics.stanford.edu/courses/cs148-10-summer/docs/2006--degreve--reflection_refraction.pdf
+        // - https://stackoverflow.com/a/58676386
+        else if (pt > 0 && rr_event < (pd + ps + pt)) {
 
+            double ref_coef = ref_index_o/ref_index_i;
+            if ((n * wo) >  0) {
+                n *= -1;
+                ref_coef = ref_index_i/ref_index_o;
+            }
+            wo = nor(wo);
+            double cos_i  = n * wo;
+            double cos_t2 = 1.0f - ref_coef * ref_coef * (1 - cos_i * cos_i);
+            if (cos_t2 < 0) {
+                return Sample(wo - ((2*n)*(wo*n)), kt, false);
+            } else {
+                return Sample(ref_coef * (wo - n * cos_i) - n * sqrtf(cos_t2), kt/pt, false);
+            }
         } 
-        // Perfect specular reflectance event (NOT IMPLEMENTED YET).
-        else if (rr_event > pd && rr_event <= ps) {
-            return Vector3();
-        }
-        // Perfect refrectation event (NOT IMPLEMENTED YET).
-        else if (rr_event > ps && rr_event <= pt) {
-            return Vector3();
-        }
-        // Ray death.
+        // Ray death event:
         else {
-            return Vector3();
+            return Sample();
         }
     }
 
@@ -163,7 +223,6 @@ public:
 std::ostream& operator<<(std::ostream& os, const Material& m) {
     return os << "[ kd: " << m.kd << ", ks: " << m.ks << ", kt: " << m.kt << "]";
 }
-
 
 //===============================================================//
 // Point light
@@ -188,6 +247,7 @@ private:
                                                        // se pudiese printear cualquier
                                                        // objeto.
 public:
+
     // Object info.
     Material m;
 
@@ -203,12 +263,14 @@ public:
                                  // destructor virtual, no hace absolutamente nada, pero
                                  // no toca los huevos.
     
-    RGB fr(Vector3 x, Vector3 wi, Vector3 wo) const {
+    // Ahora el fr ya no pertenece al objeto sino al material y se calcula a lo
+    // ruleta rusa, entonces, aqui ya no hace nada.
+    virtual RGB emission() const {
         return m.kd/M_PI;
     }
 
-    virtual std::vector<float> intersects(const Ray& ray) = 0;
-    virtual Vector3 normal(Vector3 p, Vector3 wi) = 0;  //wi es el vector del rayo incidente
+    virtual double intersects(const Ray& ray) = 0;
+    virtual Vector3 normal(Vector3 wo = Vector3(), Vector3 p = Vector3()) = 0;
 
     friend std::ostream& operator<<(std::ostream& os, Object& p) {
         return p.print(os);
@@ -238,13 +300,13 @@ private:
     //                            //  - 1: texture geometrical height;
     //                            //  - 2: texture geometrical width;
     ////int qi, qj; // Index of the texture quad that has been intersected.
-    //float qw, qh; // Width and height of a single quad.
-    //float tw, th; // Width and height of the texture.
+    //double qw, qh; // Width and height of a single quad.
+    //double tw, th; // Width and height of the texture.
     //RGB q_color;  // Color of the texture quad that has been intersected.
 
 public:
     // Geometrical things
-    float D;                 // Implicit equation A*x+B*y+C*z+D
+    double D;                 // Implicit equation A*x+B*y+C*z+D
                              //     (= 0 if the point is in the plane).
     Vector3 n;               // Normal of the plane = (A,B,C).
     std::vector<Vector3> b;  // Vertex bounds of the plane (if finite).
@@ -256,13 +318,10 @@ public:
     // ==========================
 
     // Solid color plane defined by a normal and its distance to the origin.
-    Plane(float D, Vector3 n, Material m = Material())
-        : Object(m), D(D), n(nor(n)) {}
+    Plane(double D, Vector3 n, Material m = Material()) : Object(m), D(D), n(nor(n)) {}
 
     // Plane defined by a normal and a plane contained point with solid color.
-    Plane(Vector3 p, Vector3 n, Material m = Material())
-        : Object(m)
-    {
+    Plane(Vector3 p, Vector3 n, Material m = Material()) : Object(m) {
         this->n = nor(n);
         this->D = -this->n*p;
     }
@@ -274,7 +333,7 @@ public:
     //  - r is the rotation of the texture.
     //  - o is the orientation (positive or negative).
     /*
-    Plane(float D, Vector3 n, Texture t, Texture_ref r, float tw, float th)
+    Plane(double D, Vector3 n, Texture t, Texture_ref r, double tw, double th)
         : Object(t), tw(tw), th(th), D(D)
     {
 
@@ -293,12 +352,10 @@ public:
     // ==========================
     // Finite plane constructors
     // ==========================
-    Plane(float D, std::vector<Vector3> b, Material m = Material())
+    Plane(double D, std::vector<Vector3> b, Material m = Material())
         : Object(m), D(D), n(nor(crs(b[1]-b[0], b[3]-b[0]))), b(b) {}
 
-    Plane(std::vector<Vector3> b, Material m = Material())
-        : Object(m), b(b)
-    {
+    Plane(std::vector<Vector3> b, Material m = Material()) : Object(m), b(b) {
         this->n = nor(crs(b[1]-b[0], b[3]-b[0]));
         this->D = -n*b[0];
     }
@@ -320,21 +377,21 @@ public:
     }
     */
 
-    std::vector<float> intersects(const Ray& r) override {
+    double intersects(const Ray& r) override {
 
         if (n*r.d == 0.f) return {};     // Si la division es 0 no hay corte.
-        float ts = -(n*r.p + D)/(n*r.d); // Calcula la distancia desde el
+        double t = -(n*r.p + D)/(n*r.d); // Calcula la distancia desde el
                                          //   centro del rayo hasta el punto de corte.
         
-        Vector3 p = (r.p + r.d*ts);
+        Vector3 x = (r.p + r.d*t);
         if (b.size()) {
-            if( n * crs(b[1]-b[0], p-b[0]) < 0 || // Point p inside edge 1 (v1 to v2).
-                n * crs(b[2]-b[1], p-b[1]) < 0 || // Point p inside edge 2 (v2 to v3).
-                n * crs(b[3]-b[2], p-b[2]) < 0 || // Point p inside edge 3 (v3 to v4).
-                n * crs(b[0]-b[3], p-b[3]) < 0)   // Point p inside edge 4 (v4 to v1).
+            if( n * crs(b[1]-b[0], x-b[0]) < 0 || // Point p inside edge 1 (v1 to v2).
+                n * crs(b[2]-b[1], x-b[1]) < 0 || // Point p inside edge 2 (v2 to v3).
+                n * crs(b[3]-b[2], x-b[2]) < 0 || // Point p inside edge 3 (v3 to v4).
+                n * crs(b[0]-b[3], x-b[3]) < 0)   // Point p inside edge 4 (v4 to v1).
             {
-                return {};
-            }        
+                return -1;
+            }  
         }
 
         // Texture things.
@@ -342,8 +399,8 @@ public:
         if (has_texture) {
             p -= t_ref[0];
             // Obtaining proportional width and height.
-            float hs = t_ref[1] * (p/th);
-            float ws = t_ref[2] * (p/tw);
+            double hs = t_ref[1] * (p/th);
+            double ws = t_ref[2] * (p/tw);
 
             // Obtaining correspondent texture indexes.
             int qi = std::abs(std::fmod(hs, th)/ qh);
@@ -359,11 +416,13 @@ public:
 
             q_color = t.quads[qi][qj].color;
         }*/
-        return {ts}; // Devolver la distancia al punto de corte.
+
+        // Devolver la distancia al punto de corte.
+        return t; 
     }
 
-    Vector3 normal(Vector3 p, Vector3 wi) override {
-        return n;
+    Vector3 normal(Vector3 wo = Vector3(), Vector3 p = Vector3()) override {
+        return (n * wo <= 0) ? n : -n;
     }
 
 };
@@ -374,40 +433,57 @@ public:
 
 class Sphere : public Object {
 private:
+
+    bool solve_quatratic(double a, double b, double c, double& x0, double& x1) {
+        double discr = b * b - 4 * a * c;
+        if (discr < 0) return false;
+        else if (discr == 0) x0 = x1 = - 0.5 * b / a;
+        else {
+            double q = (b > 0) ?
+                -0.5 * (b + sqrt(discr)) :
+                -0.5 * (b - sqrt(discr));
+            x0 = q / a;
+            x1 = c / q;
+        }
+        if (x0 > x1) std::swap(x0, x1);
+
+        return true;
+    }
+
     std::ostream& print(std::ostream& os) override {
         return os << "SPHERE {"
-            << "\n  center: "   << c
+            << "\n  center: "   << center
             << "\n  radius: "   << r 
             << "\n  material: " << m
             << "\n}";
     }
 public:
-    Vector3 c;
-    float r;
+    Vector3 center;
+    double r;
 
-    Sphere(Vector3 c, float r, Material m = Material()) : Object(m), c(c), r(r) {}
+    Sphere(Vector3 center, double r, Material m = Material()) 
+        : Object(m), center(center), r(r) {}
 
-    std::vector<float> intersects(const Ray& ray) override {
-        float a, b, c_, q, x0, x1; Vector3 L;
-        L = ray.p-c;
-        a = ray.d*ray.d;
-        b = 2*ray.d*L;
-        c_ = L*L - r*r;
-        // Solve quadratic formula.
-        float discr = b*b - 4*a*c_; 
-        if (discr<0) return {};
-        else if (discr == 0) return {-0.5f*b/a};
-        else {
-            q = (b > 0) ? -0.5f*(b+sqrt(discr)) : -0.5f*(b-sqrt(discr));
-            x0 = q/a; x1 = c_/q;
-            if (x0 > x1) swap(x0,x1);
-            return {x0, x1};
-        }
+    double intersects(const Ray& ray) override {
+
+        Vector3 L = ray.p - center;
+        double a = ray.d * ray.d;
+        double b = 2 * ray.d * L;
+        double c = L * L - r * r;
+        double delta = b*b - 4*a*c;
+
+        if (delta < EPSILON_ERROR) return -1;
+        double t0 = (-b - sqrt(delta)) / (2*a);
+        double t1 = (-b + sqrt(delta)) / (2*a);
+        if (t0 <= EPSILON_ERROR && t1 <= EPSILON_ERROR) return -1;
+        return t0 > EPSILON_ERROR ? t0 : t1;
+
     }
 
-    Vector3 normal(Vector3 p, Vector3 wi) override {
-        return p-c;
+    Vector3 normal(Vector3 wo = Vector3(), Vector3 p = Vector3()) override {
+        return p-center;
     }
+
 };
 
 //===============================================================//
@@ -433,17 +509,18 @@ public:
     Box(Vector3 min, Vector3 max, Material m = Material())
         : Object(m), bounds({ min, max }), center( (max-min)/2) {}
 
-    std::vector<float> intersects(const Ray& ray) override {
-
+    double intersects(const Ray& ray) override {
+        return -1;
+        /*
         Vector3 inv_d(1.f/ray.d.x, 1.f/ray.d.y, 1.f/ray.d.z);
         bool sign_dir_x = inv_d.x < 0;
         bool sign_dir_y = inv_d.y < 0;
         bool sign_dir_z = inv_d.z < 0;
 
-        float p0 = (bounds[sign_dir_x].x - ray.p.x) * inv_d.x;
-        float p1 = (bounds[1 - sign_dir_x].x - ray.p.x) * inv_d.x;
-        float b0 = (bounds[sign_dir_y].y - ray.p.y) * inv_d.y;
-        float b1 = (bounds[1 - sign_dir_y].y - ray.p.y) * inv_d.y;
+        double p0 = (bounds[sign_dir_x].x - ray.p.x) * inv_d.x;
+        double p1 = (bounds[1 - sign_dir_x].x - ray.p.x) * inv_d.x;
+        double b0 = (bounds[sign_dir_y].y - ray.p.y) * inv_d.y;
+        double b1 = (bounds[1 - sign_dir_y].y - ray.p.y) * inv_d.y;
         if ((p0 > b1) || (b0 > p1)) return {};
         if (b0 > p0) p0 = b0;
         if (b1 < p1) p1 = b1;
@@ -457,14 +534,14 @@ public:
         if (p0 < 0) {
             if (p1 < 0) return {};
             else return { p1 };
-        } else return { p0 };
+        } else return { p0 };*/
     }
 
-    // Translate one of the bounds along half the distance of the direction
-    // created from that bound to the other to obtain the center. Then, n = p-c.
-    Vector3 normal(Vector3 p, Vector3 wi) override { 
-        return p-(bounds[0] + 0.5f * (bounds[1] - bounds[0]));
+    Vector3 normal(Vector3 wo = Vector3(), Vector3 p = Vector3()) override { 
+        // TODO: corregirlo.
+        return Vector3();
     }
+
 };
 
 //===============================================================//
@@ -486,14 +563,14 @@ public:
     Triangle(std::vector<Vector3> v, Material m = Material()) 
         : Plane(v[0], crs(v[1]-v[0], v[2]-v[0]), m), v(v) {}
 
-    std::vector<float> intersects(const Ray& r) override {
-        std::vector<float> t;
-        if ((t = Plane::intersects(r)).empty()) return {};
+    double intersects(const Ray& r) override {
+        double t;
+        if ((t = Plane::intersects(r)) < 0) return t;
 
-        Vector3 p = r.p + r.d*t[0];
-        if (n * crs(v[1]-v[0], p-v[0]) < 0 ||          // Point p inside edge 1 (v1 to v2).
-            n * crs(v[2]-v[1], p-v[1]) < 0 ||          // Point p inside edge 2 (v2 to v3).
-            n * crs(v[0]-v[2], p-v[2]) < 0) return {}; // Point p inside edge 3 (v3 to v1).
+        Vector3 x = r.d*t + r.p;
+        if (n * crs(v[1]-v[0], x-v[0]) < 0 ||          // Point p inside edge 1 (v1 to v2).
+            n * crs(v[2]-v[1], x-v[1]) < 0 ||          // Point p inside edge 2 (v2 to v3).
+            n * crs(v[0]-v[2], x-v[2]) < 0) return -1; // Point p inside edge 3 (v3 to v1).
         return t;
     }
 
@@ -575,21 +652,23 @@ public:
         }
     }
 
-    std::vector<float> intersects(const Ray& r) override {
+    double intersects(const Ray& r) override {
+        /*
         if (collider.intersects(r).empty()) return {};
         
-        std::vector<float> ts;
+        std::vector<double> ts;
         for (auto& f : faces) {
-            std::vector<float> tp;
+            std::vector<double> tp;
             if ((tp = f.intersects(r)).size() && tp[0] > 0 && !insert(ts, tp[0])) {
                 q_dot = f;
             }
         }
-        return ts;
+        return ts;*/
+        return -1;
     }
 
     // Calcular en que triangulo queda el punto.
-    Vector3 normal(Vector3 p, Vector3 wi) override {
+    Vector3 normal(Vector3 wo = Vector3(), Vector3 p = Vector3()) override {
         return q_dot.n;
     }
 

@@ -18,18 +18,18 @@ class RGB {
 private:
     // ...
 public:
-    float R, G, B;
-    RGB() : R(0), G(0), B(0) {}
+    double R, G, B;
+    RGB() : R(0.0), G(0.0), B(0.0) {}
     RGB(int C) : R(C/255.0), G(C/255.0), B(C/255.0) {}
     RGB(int R, int G, int B) : R(R/255.0), G(G/255.0), B(B/255.0) {}
-    RGB(float C) : R(C), G(C), B(C) {}
-    RGB(float R, float G, float B) : R(R), G(G), B(B) {}
+    RGB(double C) : R(C), G(C), B(C) {}
+    RGB(double R, double G, double B) : R(R), G(G), B(B) {}
 
     void operator=(const int i) {
-        R = G = B = float(i)/255.0;
+        R = G = B = double(i)/255.0;
     }
 
-    void operator=(const float d) {
+    void operator=(const double d) {
         R = G = B = d;
     }
 
@@ -45,19 +45,19 @@ public:
         B *= pixel.B;
     }
 
-    void operator*=(const float d) {
+    void operator*=(const double d) {
         R *= d;
         G *= d;
         B *= d;
     }
 
-    void operator/=(const float d) {
+    void operator/=(const double d) {
         R /= d;
         G /= d;
         B /= d;
     }
 
-    void operator^=(const float d) {
+    void operator^=(const double d) {
         R = pow(R, d);
         G = pow(G, d);
         B = pow(B, d);
@@ -68,7 +68,7 @@ RGB operator+(const RGB& fst, const RGB& snd) {
     return RGB(fst.R + snd.R, fst.G + snd.G, fst.B + snd.B);
 }
 
-RGB operator*(const RGB& pixel, const float d) {
+RGB operator*(const RGB& pixel, const double d) {
     return RGB(pixel.R * d, pixel.G * d, pixel.B * d);
 }
 
@@ -76,20 +76,25 @@ RGB operator*(const RGB& fst, const RGB& snd) {
     return RGB(fst.R * snd.R, fst.G * snd.G, fst.B * snd.B);
 }
 
-RGB operator/(const RGB& pixel, const float d) {
+RGB operator/(const RGB& pixel, const double d) {
     return RGB(pixel.R / d, pixel.G / d, pixel.B / d);
 }
 
-RGB operator^(const RGB& pixel, const float d) {
-    return RGB(float(pow(pixel.R, d)), pow(pixel.G, d), pow(pixel.B, d));
+RGB operator^(const RGB& pixel, const double d) {
+    return RGB(double(pow(pixel.R, d)), pow(pixel.G, d), pow(pixel.B, d));
 }
 
 bool operator==(const RGB& a, const RGB& b) {
     return a.R == b.R && a.G == b.G && a.B == b.B;
 }
 
-float max(const RGB& pixel) {
-    float max = pixel.R;
+template <typename T>
+bool operator>(const RGB& pixel, const T& d) {
+    return pixe.R > d || pixel.G > d || pixel.B > d;
+}
+
+double max(const RGB& pixel) {
+    double max = pixel.R;
     if (max < pixel.G) max = pixel.G;
     if (max < pixel.B) max = pixel.B;
     return max;
@@ -149,8 +154,8 @@ public:
                         //      https://netpbm.sourceforge.net/doc/index.html
                         //      https://netpbm.sourceforge.net/doc/ppm.html#index
     std::string name;   // Name of the file.
-    float maxval;       // Maximum value of the color resolution in memory.
-    float memval;       // Maximum value of the color resolution generated in memory (after
+    double maxval;       // Maximum value of the color resolution in memory.
+    double memval;       // Maximum value of the color resolution generated in memory (after
                         //      tone mapping operations).
     int   width;        // Width of the ppm file.    
     int   height;       // Height of the ppm file.
@@ -166,14 +171,15 @@ public:
     
     Image() {}
 
-    Image(int width, int height) : format("P3") {
-        this->name   = "IMAGE";
+    Image(int width, int height, std::string name = "IMAGE") {
+        this->format = "P3";
+        this->name   = name;
         this->width  = width;
         this->height = height;
         this->pixels = Channels(height, std::vector<RGB>(width));
         this->maxval = this->memval = 0;
     }
-    
+
     Image(std::string file) {
         // Opening the PPM file.
         std::ifstream in(file);
@@ -193,6 +199,10 @@ public:
         }
         in.close();
     }
+
+    std::vector<RGB>& operator[ ](const int& i) {
+        return pixels[i];
+    }
 };
 
 std::ostream& operator<<(std::ostream& os, const Image& i) {
@@ -210,6 +220,8 @@ std::ostream& operator<<(std::ostream& os, const Image& i) {
         std::cout << std::endl;
     }
 }
+
+
 
 //===============================================================//
 // Exporting an image.
@@ -240,23 +252,23 @@ void export_image(Image& i, std::string name, bool LDR = false, bool convert = f
 // Tone mapping
 //===============================================================//
 
-void tone_mapping(Image& i, int flags, float c_map = 1.0, float e_map = 1.0, float g_map = 2.2) {
+void tone_mapping(Image& i, int flags, double c_map = 1.0, double e_map = 1.0, double g_map = 2.2) {
 
     if (flags & clamp) {
         if (c_map > i.memval) return;
-        i.memres = c_map * (float)i.colres/i.maxval;
+        i.memres = c_map * (double)i.colres/i.maxval;
         i.memval = c_map;
     }
 
-    float e_max = i.memval;
+    double e_max = i.memval;
     if (flags & (equalize | gamma)) {
-        i.colres = i.memres = e_map * (float)i.colres/i.maxval;
+        i.colres = i.memres = e_map * (double)i.colres/i.maxval;
         i.maxval = i.memval = e_map;
     }
 
     if (flags & gamma) {
         i.maxval = i.memval = std::pow(i.memval, 1/g_map);
-        i.colres = i.memres = i.memval * (float)i.colres/i.memval;
+        i.colres = i.memres = i.memval * (double)i.colres/i.memval;
     }
 
     for (auto& h : i.pixels) {
