@@ -8,7 +8,6 @@
 #ifndef M_PI
     #define M_PI 3.14159265358979323846
 #endif
-#define N 4
 #define EPSILON_ERROR 0.000001
 
 enum Rotation { X_ROT = 0x1, Y_ROT = 0x2, Z_ROT = 0x4 };
@@ -81,6 +80,16 @@ public:
         x *= d;
         y *= d;
         z *= d; 
+    }
+
+    const double& operator[](size_t i) const {
+        if (i == 0) {
+            return x;
+        } else if (i == 1) {
+            return y;
+        } else {
+            return z;
+        }
     }
 
 };
@@ -187,11 +196,11 @@ Vector3 rot(Vector3 a, Vector3 b, double r = M_PI/2) {
 // https://graphics.pixar.com/library/OrthonormalB/paper.pdf
 std::vector<Vector3> orthonormal_basis(const Vector3& n) {
 
-    double sign = copysignf(1.0f, n.z);
-    const double a = -1.0f / (sign + n.z);
+    double sign = copysignf(1.0, n.z);
+    const double a = -1.0 / (sign + n.z);
     const double b = n.x * n.y * a;
     return {
-        Vector3(1.0f + sign * n.x * n.x * a, sign * b, -sign * n.x),
+        Vector3(1.0 + sign * n.x * n.x * a, sign * b, -sign * n.x),
         Vector3(b, sign + n.y * n.y *a, -n.y)
     };
 
@@ -240,7 +249,7 @@ class Matrix3 {
 private:
 
     // Coeficient matrix.
-    void cof3(double A[N][N], double temp[N][N], int row, int col, int n) {
+    void cof3(double A[4][4], double temp[4][4], int row, int col, int n) {
         int i = 0, j = 0;
         for (int x = 0; x < n; x++) {
             for (int y = 0; y < n; y++) {
@@ -256,10 +265,10 @@ private:
     }
 
     // Matrix determinant.
-    double det3(double A[N][N], int n) {
+    double det3(double A[4][4], int n) {
         if (n == 1) return A[0][0];
         
-        double d = 0, temp[N][N];
+        double d = 0, temp[4][4];
         for (int f = 0; f < n; f++) {
             if (A[0][f]) {
                 cof3(A, temp, 0, f, n);
@@ -270,12 +279,12 @@ private:
     }
 
     // Adjunct matrix.
-    void adj3(double A[N][N], double adj[N][N]) {
-        double temp[N][N];
-        for (int i = 0; i < N; i++) {
-            for (int j = 0; j < N; j++) {
-                cof3(A, temp, i, j, N);
-                adj[j][i] = (det3(temp, N - 1));
+    void adj3(double A[4][4], double adj[4][4]) {
+        double temp[4][4];
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 4; j++) {
+                cof3(A, temp, i, j, 4);
+                adj[j][i] = (det3(temp, 4 - 1));
                 if (adj[j][i]) adj[j][i] *= (((i + j) % 2 == 0) ? 1 : -1);
             }
         }
@@ -302,14 +311,14 @@ public:
     }
     
     virtual Matrix3 invert() {
-        double det = det3(m, N);
+        double det = det3(m, 4);
         if (!det) return *this;
 
-        double aux[N][N];
+        double aux[4][4];
         adj3(m, aux);
 
-        for (int i = 0; i < N; i++) {
-            for (int j = 0; j < N; j++) {
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 4; j++) {
                 aux[i][j] = aux[i][j] / det;
             }
         }

@@ -3,27 +3,67 @@
 #include <cmath>
 #include <ctime>
 #include <fstream>
+#include <functional>
 #include <mutex>
 #include <random>
 #include <thread>
 #include "geometry.hpp"
+#include "kd_tree.h"
 #include "objects.hpp"
 
 //===============================================================//
 // Definitions
 //===============================================================//
 
+using Photon_map = nn::KDTree<Photon, 3, PhotonAxisPosition>;
 using Object_ptr = std::shared_ptr<Object>; 
 using Objects    = std::vector<Object_ptr>;
 using Lights     = std::vector<Light>;
 
-struct RenderObject {
-public:
-    Objects objects;
-    Lights  lights;
+/**
+ * @brief Camera render mode.
+ *  1. RAY_TRACING: just rasterization, without any light.
+ *  2. PATH_TRACING: ray path + direct & indirect light.
+ *  3. PHOTON_MAPPING: photon path + direct & indirect light.
+ * 
+ */
+enum Render_mode { RAY_TRACING, PATH_TRACING, PHOTON_MAPPING };
 
-    RenderObject(Objects o, Lights l) : objects(o), lights(l) {}
+/**
+ * @brief Render parameters, created for some coding magic.
+ * 
+ */
+struct Render_params {
+public:
+    // Renderable Objects.
+    Objects objects;
+
+    // Renderable lights.
+    Lights lights;
+
+    // Renderable photons.
+    Photon_map pmap;
+
+    // Incident ray (wo).
+    Ray ray;
+
+    // Object that was previously intersected. Null if no object was.
+    Object_ptr p_obj;
+
+    // How many bounces has our ray bounced already.
+    int depth;
+
+    Render_params(Objects o, Lights l, Photon_map pmap)
+        : objects(o), lights(l), pmap(pmap), p_obj(nullptr), depth(0) {}
+    Render_params(Objects o, Lights l, Ray r, Object_ptr p_obj, int depth)
+        : objects(o), lights(l), ray(r), p_obj(p_obj), depth(depth) {}
+    Render_params(Objects o, Lights l, Photon_map pmap, Ray r, Object_ptr p_obj)
+        : objects(o), lights(l), pmap(pmap), ray(r), p_obj(p_obj) {}
 };
+
+std::ostream& operator<<(std::ostream& os, const Render_params& r) {
+    return os << r.ray << ", " << r.depth << std::endl;
+}
 
 //===============================================================//
 // Camera
@@ -31,82 +71,126 @@ public:
 
 // Intersection offset to avoid Shadow Acne and self intersection:
 // https://www.scratchapixel.com/lessons/3d-basic-rendering/introduction-to-shading/ligth-and-shadows
-#define SHADOW_BIAS 0.00001f
+#define SHADOW_BIAS 0.00001
 
-enum Mode { RAY_TRACING, PATH_TRACING, PHOTON_MAPPING };
+// Camera settings
+struct Camera_settings {
+
+    // General settings:
+    // -- Camera geometrical base:
+    Vector3 center;         // Camera position.
+    Vector3 left;           // Camera width projection.
+    Vector3 up;             // Camera height projection.
+    Vector3 front;          // Camera depth projection.
+    // -- Camera pixel base:
+    int ppp;                // Point/paths per pixel.
+    // -- Camera renderization base:
+    Render_mode m;          // Camera render mode.
+
+    // Path tracing settings:
+    int RAY_MAX_DEPTH;      // Path tracing max depth.
+
+    // Photon mapping settings:
+    unsigned long nphotons; // Max number of photons to look for.
+    double radius;          // Photon search radius.
+
+};
+
+std::ostream& operator<<(std::ostream& os, const Camera_settings& s) {
+    return os << "Camera coords: " << s.center << ", " << s.left << ", " << s.up << ", " << s.front << "\n"
+        << "PPP: " << s.ppp << "\n"
+        << "RAY_MAX_DEPTH: " << s.RAY_MAX_DEPTH << "\n" 
+        << "NPHOTONS: " << s.nphotons << "\n" 
+        << "RADIUS SEARCH: " << s.radius << "\n";
+}   
 
 class Camera {
 private:
+public:
 
-    // Returns an antialiasing point.
-    std::vector<Vector3> antialiasing_samples(Vector3 ref) {
-        if (ppp == 1) {
-            return { ref };
-        } else {
-            std::vector<Vector3> samples(ppp);
-            std::uniform_real_distribution<> x( ref.x - p_left.x, ref.x + p_left.x);
-            std::uniform_real_distribution<> y( ref.y - p_up.y, ref.y + p_up.y);
-            for (auto& s : samples) {
-                s = Vector3(x(e2), y(e2), ref.z);
-            }
-            return samples;
-        }
+    /**
+     * @brief Generates an antialiasing pixel point.
+     * 
+     * @param ref Pixel center reference.
+     * @return Vector3 
+     */
+    inline Vector3 antialiasing_sample(Vector3 ref) {
+        std::uniform_real_distribution<> x( ref.x - p_left.x, ref.x + p_left.x);
+        std::uniform_real_distribution<> y( ref.y - p_up.y, ref.y + p_up.y);
+        return Vector3(x(e2), y(e2), ref.z);
     }
 
-    // Casting a ray.
     /**
-     * @brief Casting a ray.
+     * @brief Ray tracing.
      * 
-     * @param s     Set of renderable objects (Geometrical objects and lights).
-     * @param r     Incident ray.
-     * @param p_obj The object that the previous cast intersected with.
-     * @param depth How many bounces do our ray to bounce.
+     * @param s Set of parameters (objects, lights, etc) needed by the render.
      * @return RGB 
      */
-    RGB cast_ray(RenderObject& s, Ray r, Object_ptr p_obj, int depth) {
+    inline RGB ray_tracing(Render_params s) {
 
-        if (depth > MAX_DEPTH) return RGB();
-        // Light contributios.
-        RGB direct_light_contrib, indirect_light_contrib;
         // Distance of the closest intersection point.
         double c_dist = INFINITY;
         // Closest object.
         Object_ptr c_obj;
         // Calculating possible intersections in the Scene.
         for (auto& o : s.objects) {
-            auto t = o->intersects(r);
+            auto t = o->intersects(s.ray);
             if (t > 0 && t < c_dist) {
                 c_dist = t;
                 c_obj  = o;
             }
         }
+        return c_obj->m.kd;
+
+    }
+
+    /** 
+     * @brief Path tracing.
+     * 
+     * @param s Set of parameters (objects, lights, etc) needed by the render.
+     * @return RGB
+     */
+    inline RGB path_tracing(Render_params s) {
+
+        if (s.depth > ini.RAY_MAX_DEPTH) return RGB();
+        // Light contributions.
+        RGB direct_light_contrib, indirect_light_contrib;
+        // Distance of the closest intersection point.
+        double c_dist = INFINITY;
+        // Closest object.
+        Object_ptr c_obj;
+        // Calculating possible intersection with the scene:
+        for (auto& o : s.objects) {
+            auto t = o->intersects(s.ray);
+            if (t > 0 && t < c_dist) {
+                c_dist = t;
+                c_obj  = o;
+            }
+        }
+        // If the ray doesn't intersect with any object, just return black color.
         if (c_obj == nullptr) return RGB();
+        // If the ray intersects with an object with emission, return its light 
+        // emission coefficient.
         if (c_obj->m.ke  > 0) return c_obj->m.ke;
-        
-        // Aqui toca meter si intersecta con un objeto que emite luz devuelva
-        // la luz o yo que se, hay que mirarlo. También pienso que hay que
-        // hacer algo en la direct_light del tipo, hemos recorrido las luces
-        // pero tenemos que recorrer los objetos también ya que algunos podrían
-        // emitir luz y es luz que también influye.
-        //if (c_obj.emissor()) return 
 
         // Montecarlo sample:
-        Vector3 x = r.d * c_dist + r.p, n = nor(c_obj->normal(r.d, x));
-        Sample samp = c_obj->m.scattering(n, r.d, 1.0 /*
-            ((p_obj == nullptr || p_obj == c_obj || c_dist > BIAS) ? 
+        Vector3 x = s.ray.d * c_dist + s.ray.p, n = nor(c_obj->normal(s.ray.d, x));
+        Sample samp = c_obj->m.scattering(n, s.ray.d,
+            ((s.p_obj == nullptr || s.p_obj == c_obj || c_dist > SHADOW_BIAS) ? 
                 1.0 : 
-                p_obj->m.ref_index_i
-            )*/
+                s.p_obj->m.ref_index_i
+            )
         );
 
-        // Compute direct light: explanation in Material class.
-        if (samp.wd_light) {
+        // Direct light computation. Delta explanation in Material class
+        // (objects.hpp):
+        if (!samp.is_delta) {
             for (auto& l : s.lights) {
-
-                // Shadow ray:
+                // Shadow ray. See shadow bias explanation in the variable
+                // declaration:
                 Ray lr(x + n * SHADOW_BIAS, l.c - x);
                 double l_mod = lr.d.mod();
-                if (l_mod == 0.0f) continue;
+                if (l_mod == 0.0) continue;
 
                 bool collides = false;
                 for (auto& o : s.objects) {
@@ -118,124 +202,215 @@ private:
                     }
                 }
                 if (collides) continue;
-                
-                direct_light_contrib += 
+
+                // Render equation:
+                direct_light_contrib +=
                     (l.pow / (l_mod * l_mod)) *
                     c_obj->emission() *
                     std::abs(n * (lr.d / l_mod));
             }
         }
 
-        // Compute indirect light.
+        // Indirect light computation.
         // Bouncing ray. Now the direction depends on the material properties:
         //  - Uniform cousine sample (Total difussion).
         //  - Reflection.
         //  - Refraction.
-        //  - More..?        
-        indirect_light_contrib += cast_ray(s, Ray(x, samp.wi), c_obj, depth+1);
+        //  - More..?
+        indirect_light_contrib += path_tracing(
+            Render_params(s.objects, s.lights, Ray(x, samp.wi), c_obj, s.depth+1)
+        );
 
         return direct_light_contrib + indirect_light_contrib * samp.fr;
     }
 
-    // Path tracing.
-    inline RGB path_tracing(RenderObject& s, Ray r) {
-        return cast_ray(s, r, nullptr, 0);
-    }
-
-    // Ray tracing.
-    inline RGB ray_tracing(RenderObject& s, Ray r) {
-
+    /**
+     * @brief Photon mapping 
+     * 
+     * @param s Set of parameters (objects, lights, etc) needed by the render.
+     * @return RGB
+     */
+    RGB photon_mapping(Render_params s) {
+        
+        // Light contribution.
+        RGB photon_light_contrib;
         // Distance of the closest intersection point.
         double c_dist = INFINITY;
         // Closest object.
         Object_ptr c_obj;
-
         // Calculating possible intersections in the Scene.
         for (auto& o : s.objects) {
-            auto t = o->intersects(r);
+            auto t = o->intersects(s.ray);
             if (t > 0 && t < c_dist) {
                 c_dist = t;
                 c_obj  = o;
             }
         }
-        return c_obj->m.kd;
+        // If the ray doesn't intersect with any object, just return black color.
+        if (c_obj == nullptr) return RGB();
+        // If the ray intersects with an object with emission, return its light 
+        // emission coefficient.
+        if (c_obj->m.ke  > 0) return c_obj->m.ke;
 
+        // Punto de colisión del rayo sobre el objeto.
+        Vector3 x = s.ray.d * c_dist + s.ray.p, n = nor(c_obj->normal(s.ray.d, x));
+        Sample samp = c_obj->m.scattering(n, s.ray.d, 
+            ((s.p_obj == nullptr || s.p_obj == c_obj || c_dist > SHADOW_BIAS) ? 
+                1.0 : 
+                s.p_obj->m.ref_index_i
+            )
+        );
+        if (samp.fr == 0) return RGB();
+        // If the object material is a delta material, we have to follow the ray 
+        // path until it intersects with a diffuse object or dies.
+        if (samp.is_delta) {
+            return photon_mapping(
+                Render_params(s.objects, s.lights, s.pmap, Ray(x, samp.wi), c_obj)
+            ) * samp.fr;
+        }
+
+        // (Change this to the camera parameters):
+        // Maximum number of photons to look for:
+        unsigned long nphotons = 100;
+        // Maximum distance to look for photons:
+        double rad = 0.05;
+        double real_rad = 0;
+
+        // Nearest photons to the collision point:
+        auto neighbors = s.pmap.nearest_neighbors(x, nphotons, rad);
+
+        // Compute real radius:
+        for (auto& p : neighbors) {
+            double dist = (p->pos - x).mod();
+            if (dist > real_rad) real_rad = dist;
+        }
+
+        // Compute light contribution:
+        for (auto& p : neighbors) {
+            // Radial basis function kernel
+            // https://towardsdatascience.com/gaussian-process-kernels-96bafb4dd63e
+            double dist = (p->pos - x).mod();
+            double RBFK = exp(-(dist*dist)/(2*real_rad*real_rad));
+
+            photon_light_contrib +=
+                // (c_obj->emission() * (p->flux / (M_PI * rad * rad)));
+                (c_obj->emission() * p->flux * RBFK);
+        }
+
+        return photon_light_contrib;
     }
-
-public:
-
-    // Camera geometrical base.
-    Vector3 center;     // Camera position.
-    Vector3 left;       // Camera width projection.
-    Vector3 up;         // Camera height projection.
-    Vector3 front;      // Camera depth projection.
 
     // Camera pixel base.
     Vector3 p_left;     // Pixel width projection.
     Vector3 p_up;       // Pixel height projection.
     Vector3 p_ref;      // Pixel dot reference.
-    int ppp;            // Point/Paths per pixel.
+
+public:
+
+    // Camera settings.
+    Camera_settings ini;
 
     // Camera view.
     Image view;         // Camera image view.
-
-    
-    Mode mode;          // Render mode.
-    int MAX_DEPTH;      // Path tracing max depth.
-
+  
     // Other.
-    progress_bar bar;   // Render progress bar.
+    Progress_bar bar;   // Render progress bar.
 
-    Camera(std::vector<Vector3> base, int width, int height, int ppp = 1,
-        Mode mode = PATH_TRACING, int MAX_DEPTH = 1) {
+    Camera(Camera_settings ini, int width, int height) {
 
-        // Camera geometrical base.
-        center = base[0];
-        left   = base[1];
-        up     = base[2];
-        front  = base[3];
+        // Camera settings.
+        if (ini.ppp < 1) { ini.ppp = 1; } this->ini = ini;
 
         // Camera pixel base.
-        p_left = left/width;
-        p_up   = up/height;
-        p_ref  = center + (up - p_up) + (left - p_left) + front;
-        this->ppp  = ppp;
+        p_left = ini.left/width;
+        p_up   = ini.up/height;
+        p_ref  = ini.center + (ini.up - p_up) + (ini.left - p_left) + ini.front;
 
-        this->mode      = mode;
-        this->MAX_DEPTH = MAX_DEPTH;
+        // Camera image view.
+        view = Image(width, height, "Camera view");
+
+        // Render progress.
+        bar  = Progress_bar("RENDERING SCENE", 80, width * height, STYLE1, 100);
+
+    }
+
+    Camera(std::vector<Vector3> base, int width, int height, int ppp,
+        Render_mode m, int RAY_MAX_DEPTH, int nphotons, double radius) {
+
+        // Camera geometrical base.
+        ini.center = base[0];
+        ini.left   = base[1];
+        ini.up     = base[2];
+        ini.front  = base[3];
+
+        // Camera pixel base.
+        p_left = ini.left/width;
+        p_up   = ini.up/height;
+        p_ref  = ini.center + (ini.up - p_up) + (ini.left - p_left) + ini.front;
+        if (ppp < 1) { ppp = 1; } ini.ppp = ppp; 
+
+        // Path tracing settings.
+        ini.m = m;
+        ini.RAY_MAX_DEPTH = RAY_MAX_DEPTH;
+
+        // Photon mapping settings.
+        ini.nphotons = nphotons;
+        ini.radius = radius;
 
         // Camera image view.
         view = Image(width, height, "Camera View");
 
         // Render progress.
-        bar  = progress_bar(80, width * height, STYLE1, 100);
+        bar  = Progress_bar("RENDERING SCENE", 80, width * height, STYLE1, 100);
 
     }
 
-    void render(RenderObject s) {
+    void render(Render_params s) {
+
+        // Render function to execute.
+        std::function<RGB(Camera*, Render_params)> render_function;
+        // Evaluating which render function has to be executed.
+        if (ini.m == RAY_TRACING) {
+            render_function = ray_tracing;
+        } else if (ini.m == PATH_TRACING) {
+            render_function = path_tracing;
+        } else if (ini.m == PHOTON_MAPPING) {
+            if (s.pmap.empty()) {
+                std::cerr << "warning: your scene doesn't have any preloaded photon map.\n";
+                return;
+            }
+            render_function = photon_mapping;
+        }
+
+        // First pixel center as reference.
         auto ref = p_ref;
+        // Iterating over camera view pixels:
         for (auto& h : view.pixels) {
             for (auto& w : h) {
-                auto p = now();
-                for (auto &as : antialiasing_samples(ref)) {
-                    if (mode == RAY_TRACING) {
-                        w += ray_tracing(s, Ray(center, as - center)); 
-                    } else if (mode == PATH_TRACING) {
-                        w += path_tracing(s, Ray(center, as - center));
-                    }
-                    
+                // For ETA purposes.
+                auto t = now();
+                // First point will be the pixel center.
+                s.ray = Ray(ini.center, ref - ini.center);
+                w += render_function(this, s);
+                // If more points needed, these will be randomly calculated:
+                for (int a = 1; a < ini.ppp; a++) {
+                    s.ray = Ray(ini.center, antialiasing_sample(ref) - ini.center);
+                    w += render_function(this, s);
                 }
-                w /= ppp;
+                // Dividing total pixel color with the ppp.
+                w /= ini.ppp;
+                // Estimating new memory color resolution value.
                 if (w.R > view.maxval) view.maxval = view.memval = w.R;
                 if (w.G > view.maxval) view.maxval = view.memval = w.G;
                 if (w.B > view.maxval) view.maxval = view.memval = w.B;
+                // Move pixel center reference horizontally.
                 ref -= 2*p_left;
-                bar.update(std::cout, now()-p);
+                // Updating bar status.
+                bar.update(std::cout, now()-t);
             }
-            ref += 2*left - 2*p_up; 
+            ref += 2*ini.left - 2*p_up;
         }
         flush_stream(std::cout);
-    
     }
 
     void export_render(std::string render_name = "./new_scene.ppm", int res = 10e8) {
@@ -245,13 +420,88 @@ public:
 
 };
 
+std::ostream& operator<<(std::ostream& os, const Camera& c) {
+    return os << c.ini
+        << "Pixel ref: " << c.p_ref  << "\n"
+        << "Pixel lft: " << c.p_left << "\n"
+        << "Pixel up:  " << c.p_up   << "\n";
+}
+
 //===============================================================//
 // Scene: a set of cameras, objects and lights.
 //===============================================================//
-
 class Scene {
 private:
-    // ...
+
+    Progress_bar bar;
+
+    inline void generate_photon_map() {
+
+        RGB total_pow;
+        for (auto& l : lights) {
+            total_pow += l.pow;
+        }
+
+        // Scene photons.
+        std::vector<Photon> photons;
+        for (auto& l : lights) {
+
+            // Light proportional photons.
+            int S = INITIAL_PHOTONS * l.pow.rad() / total_pow.rad();
+
+            // Casting photons
+            for (int p = 0; p < S; p++) {
+                // Uniform spherical sampling : Angular sampling.
+                double lat = acos(2*E(e2) - 1); //acos(C(e2));
+                double azi = 2*M_PI*E(e2);
+                Ray r(l.c, Vector3(sin(lat)*cos(azi), sin(lat)*sin(azi), cos(lat)));
+                RGB flux = (4*M_PI*l.pow)/S;
+
+                auto t = now();
+                for (int depth = 0; depth < MAX_PHOTON_DEPTH; depth++) {
+                    // If the photon flux is near to 0, just stop iterating.
+                    if (flux.rad() < EPSILON_ERROR) break;
+
+                    // Closest distance:
+                    double c_dist = INFINITY;
+                    // Closest object:
+                    Object_ptr c_obj;
+                    // Calculating possible intersections with the scene:
+                    for (auto& o : objects) {
+                        auto t = o->intersects(r);
+                        if (t > 0 && t < c_dist) {
+                            c_dist = t;
+                            c_obj  = o;
+                        }
+                    }
+                    // If the photon doesn't intersect with any object of the scene
+                    // just stop iterating.
+                    if (c_obj == nullptr) break;
+                    // If the photon intersects with an object with light emission, 
+                    // stop iterating.
+                    if (c_obj->m.ke  > 0) break;
+
+                    // Colision point.
+                    Vector3 x = r.d * c_dist + r.p, n = nor(c_obj->normal(r.d, x));
+                    Sample samp = c_obj->m.scattering(n, r.d, 1.0);
+
+                    // Changing to the new direction.
+                    r = Ray(x, samp.wi);
+
+                    // Adding a new photon. If is delta material, doesn't make 
+                    // sense to store the photon:
+                    if (!samp.is_delta) {
+                        photons.push_back(Photon(x, flux, samp.wi));
+                    }
+
+                    // New flux resulting of the bounce.
+                    flux *= (samp.fr);
+                } 
+                bar.update(std::cout, now() - t);
+            }   
+        }
+    }
+
 public:
 
     // Scene cameras.
@@ -263,11 +513,30 @@ public:
     // Scene lights.        
     Lights lights;
 
+    // Scene photon map
+    Photon_map pmap;
+    // How many photons to shoot in the first iteration between every light source.
+    int INITIAL_PHOTONS;
+    // Max number of total photons.
+    int MAX_PHOTONS;
+    // Max bounce photon depth.
+    int MAX_PHOTON_DEPTH;
+
     Scene(std::vector<Camera> cameras, Objects objects, Lights lights)
         : cameras(cameras), objects(objects), lights(lights) {}
+    Scene(std::vector<Camera> cameras, Objects objects, Lights lights,
+        int INITIAL_PHOTONS, int MAX_PHOTONS, int MAX_PHOTON_DEPTH)
+        : cameras(cameras), objects(objects), lights(lights)
+    {
+        this->INITIAL_PHOTONS = INITIAL_PHOTONS;
+        this->MAX_PHOTONS = MAX_PHOTONS;
+        this->MAX_PHOTON_DEPTH = MAX_PHOTON_DEPTH;
+        bar = Progress_bar("CREATING PHOTON MAP", 60, INITIAL_PHOTONS, STYLE1, 50);
+        generate_photon_map();
+    }
 
     void render(int i = 0) {
-        cameras[i].render(RenderObject(objects, lights));
+        cameras[i].render(Render_params(objects, lights, pmap));
     }
 
     void export_render(int i = 0, std::string render_name = "./new_scene.ppm", int res = 10e8) {

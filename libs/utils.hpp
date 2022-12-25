@@ -207,7 +207,7 @@ using Style = std::vector<std::string>;
 const Style STYLE1 = {"=",">"," "};
 const Style STYLE2 = {"█",">","▒"};
 
-class progress_bar {
+class Progress_bar {
 private:
     int bar_width;   // Bar width.
     int c_progress;  // Current progress.
@@ -225,8 +225,11 @@ private:
     // std::mutex m; // Mutex for threaded progress bar. 
 public:
 
-    progress_bar() {};
-    progress_bar(int bar_width, int t_progress, std::vector<std::string> style, int update_t) {
+    Progress_bar() {};
+    Progress_bar(std::string task, int bar_width, int t_progress, 
+        std::vector<std::string> style, int update_t)
+    {
+        std::cout << "[" << task << "]\n";
         this->bar_width  = bar_width;
         this->c_progress = 0;
         this->t_progress = t_progress;
@@ -234,6 +237,7 @@ public:
         this->eta = "NA:NA:NA";
         this->update_t = std::chrono::milliseconds(update_t);
         this->p = now();
+
     }
 
     void update(std::ostream& os, std::chrono::nanoseconds time) {

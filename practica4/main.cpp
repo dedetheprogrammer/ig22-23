@@ -1,5 +1,6 @@
 #include <iostream>
 #include "scene.hpp"
+#include "objects.hpp"
 
 // TODO: Hacer modificadores poco a poco (decidir cuales si y no).
 // - OK ... Other geometries
@@ -11,9 +12,9 @@
 // - OK ...... Reflectance.
 // - OK ...... Refractance.
 // - ?? ...... More?
-// -    ... Fresnell effects.  
-// -    ... Light areas.
-// -    ... Start looking into photon mapping.
+// - IP ... Fresnell effects.  
+// - OK ... Light areas.
+// - OK ... Start looking into photon mapping.
 // -    ... Acceleration structures.
 // -    ... Parallelization.
 // -    ... Textures.
@@ -36,13 +37,13 @@ int main (int argc, char* argv[]) {
 
     Scene s({
         // Camaras.
-        Camera({Vector3(0,0,-3.5), Vector3(-1,0,0), Vector3(0,1,0), Vector3(0,0,3)}, 512, 512, 512, PATH_TRACING, 25)
+        Camera({Vector3(0,0,-3.5), Vector3(-1,0,0), Vector3(0,1,0), Vector3(0,0,3)}, 512, 512, 32, PATH_TRACING, 15, 0, 0)
     }, {
         // Objetos.
         std::make_shared<Plane>(Plane(1, Vector3(1,0,0) , Material(RGB(210,0,0)))),    //Plano de la izquierda
         std::make_shared<Plane>(Plane(1, Vector3(-1,0,0), Material(RGB(0,210,0)))),   //Plano de la derecha
         std::make_shared<Plane>(Plane(1, Vector3(0,1,0) , Material(RGB(240,240,240)))),    //Plano de abajo
-        std::make_shared<Plane>(Plane(1, Vector3(0,-1,0), Material(RGB(240,240,240)))),   //Plano de arriba
+        std::make_shared<Plane>(Plane(1, Vector3(0,-1,0), Material(RGB(240,240,240), RGB(), RGB(), RGB(/*1.0, 1.0, 1.0*/)))),   //Plano de arriba
         std::make_shared<Plane>(Plane(1, Vector3(0,0,-1), Material(RGB(240,240,240)))),     //Plano de atrás
         std::make_shared<Sphere>(Sphere(Vector3(-0.5,-0.7,0.25), 0.3, Material(RGB(220,145,220), RGB(80,80,80)))),  //Esfera de la izquierda
         std::make_shared<Sphere>(Sphere(Vector3(0.5,-0.7,-0.25), 0.3, Material(RGB(/*125,200,200*/), RGB(30,30,30), RGB(255,255,255), RGB(), 1.5))),  //Esfera de la derecha
@@ -57,10 +58,12 @@ int main (int argc, char* argv[]) {
         //std::make_shared<Mesh>(m * Matrix3Rotation(X_ROT, -45)),
     }, {
         // Luces puntuales.
-        Light(Vector3(0,0.5,0), RGB(1.0f,1.0f,1.0f))
+        Light(Vector3(0,0.5,0), RGB(1.0,1.0,1.0))
     });
 
-    s.render();
-    s.export_render();
+    
+    //std::cout << s.cameras[0] << std::endl;
+    //s.render();
+    //s.export_render();
 
 }

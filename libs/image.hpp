@@ -25,6 +25,10 @@ public:
     RGB(double C) : R(C), G(C), B(C) {}
     RGB(double R, double G, double B) : R(R), G(G), B(B) {}
 
+    double rad() const {
+        return (R + G + B) / 3;
+    }
+
     void operator=(const int i) {
         R = G = B = double(i)/255.0;
     }
@@ -90,7 +94,7 @@ bool operator==(const RGB& a, const RGB& b) {
 
 template <typename T>
 bool operator>(const RGB& pixel, const T& d) {
-    return pixe.R > d || pixel.G > d || pixel.B > d;
+    return pixel.R > d || pixel.G > d || pixel.B > d;
 }
 
 double max(const RGB& pixel) {

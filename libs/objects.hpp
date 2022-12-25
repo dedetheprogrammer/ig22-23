@@ -76,12 +76,12 @@ struct Sample {
     // too small to take in account).
     //
     // Then we indicate if the d_light has to be calculated or not.
-    bool wd_light;
+    bool is_delta;
 
     Sample()
-        : wi(Vector3()), fr(RGB()), wd_light(false) {}
-    Sample(Vector3 wi, RGB fr, bool wd_light)
-        : wi(wi), fr(fr), wd_light(wd_light) {}
+        : wi(Vector3()), fr(RGB()), is_delta(true) {}
+    Sample(Vector3 wi, RGB fr, bool is_delta)
+        : wi(wi), fr(fr), is_delta(is_delta) {}
 };
 
 class Material {
@@ -103,7 +103,6 @@ private:
     }
 
     // etat = ref_index_i, etai = ref_index_o.
-
     double fresnel_coefficients(Vector3& n, Vector3 wo, double ref_index_o, double ref_index_i) {
         
         if ((n * wo) > 0) {
@@ -113,7 +112,7 @@ private:
         wo = nor(wo);
         double ref_coef = ref_index_o/ref_index_i;
         double cos_i = n * wo;
-        double cos_t2 = 1.0f - ref_coef * ref_coef * (1 - cos_i * cos_i);
+        double cos_t2 = 1.0 - ref_coef * ref_coef * (1 - cos_i * cos_i);
         if (cos_t2 < 0) {
             ps = 1;
             pt = 0;
@@ -168,7 +167,7 @@ public:
         coefficient_correction();
 
     }
-    // etat = ref_index_i, etai = ref_index_o.
+
     Sample scattering(Vector3 n, Vector3 wo = Vector3(), double ref_index_o = 1) {
 
         // Russian roulette event generator.
@@ -179,7 +178,6 @@ public:
 
         // Lambertian diffuse event:
         if (pd > 0 && rr_event < pd) {
-
             double lat = acos(sqrt(1 - E(e2))); // SE GENERAN COMO RADIANES
             double azi = 2*M_PI*E(e2);          // LO HE COMPROBADO.
             // Orthonormal basis:
@@ -187,11 +185,11 @@ public:
             // New direction sampling:
             Vector3 dir = Matrix3BaseChange(b[0],b[1], n, Vector3())
                 * Vector3(sin(lat)*cos(azi), sin(lat)*sin(azi), cos(lat));
-            return Sample(dir, kd/pd, true);
+            return Sample(dir, kd/pd, false);
         }
         // Perfect specular reflectance event:
         else if (ps > 0 && rr_event < (pd + ps)) {
-            return Sample(wo - ((2*n)*(wo*n)), ks/ps, false);
+            return Sample(wo - ((2*n)*(wo*n)), ks/ps, true);
         }
         // Perfect refrectation event:
         // - https://graphics.stanford.edu/courses/cs148-10-summer/docs/2006--degreve--reflection_refraction.pdf
@@ -205,13 +203,13 @@ public:
             }
             wo = nor(wo);
             double cos_i  = n * wo;
-            double cos_t2 = 1.0f - ref_coef * ref_coef * (1 - cos_i * cos_i);
+            double cos_t2 = 1.0 - ref_coef * ref_coef * (1 - cos_i * cos_i);
             if (cos_t2 < 0) {
-                return Sample(wo - ((2*n)*(wo*n)), kt, false);
+                return Sample(wo - ((2*n)*(wo*n)), kt/pt, true);
             } else {
-                return Sample(ref_coef * (wo - n * cos_i) - n * sqrtf(cos_t2), kt/pt, false);
+                return Sample(ref_coef * (wo - n * cos_i) - n * sqrtf(cos_t2), kt/pt, true);
             }
-        } 
+        }
         // Ray death event:
         else {
             return Sample();
@@ -224,6 +222,36 @@ std::ostream& operator<<(std::ostream& os, const Material& m) {
     return os << "[ kd: " << m.kd << ", ks: " << m.ks << ", kt: " << m.kt << "]";
 }
 
+//=================================================================//
+// Light
+//=================================================================//
+
+//===============================================================//
+// Light photon
+//===============================================================//
+class Photon {
+private:
+    // ... 
+public:
+    // Photon position.
+    Vector3 pos;
+    // Photon flux.
+    RGB flux;
+    // Photon next direction.
+    Vector3 wi;
+    Photon (Vector3 pos, RGB flux, Vector3 wi) : pos(pos), flux(flux), wi(wi) {}
+};
+
+std::ostream& operator<<(std::ostream& os, const Photon& p) {
+    return os << "Photon { " << p.pos << ", " << p.flux << ", " << p.wi << " }";
+}
+
+struct PhotonAxisPosition {
+    double operator()(const Photon& p, std::size_t i) const {
+        return p.pos[i];
+    }
+};
+
 //===============================================================//
 // Point light
 //===============================================================//
@@ -231,14 +259,26 @@ class Light {
 private:
     // ...
 public:
+    // Point light center.
     Vector3 c;
+    // Point light power.
     RGB pow;
+
     Light(Vector3 c = Vector3(), RGB pow = RGB()) : c(c), pow(pow) {}
 };
 
-//===============================================================//
-// Object
-//===============================================================//
+//=================================================================//
+// Objects
+//=================================================================//
+
+class Object;
+
+struct Collision {
+    std::shared_ptr<Object> obj; // Collisioned object.
+    Vector3 normal; // Collisioned object normal.
+    Vector3 point;  // Collision point.
+    double dist;    // Collision distance.
+};
 
 class Object {
 private:
