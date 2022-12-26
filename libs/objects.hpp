@@ -6,6 +6,46 @@
 #include "utils.hpp"
 
 //===============================================================//
+// Properties
+//===============================================================//
+class Box_collider {
+private:
+    //...
+public:
+    std::vector<Vector3> b;
+    Vector3 center;
+
+    Box_collider() : b({Vector3(INFINITY, INFINITY, INFINITY), Vector3(-INFINITY, -INFINITY,-INFINITY)}) {}
+    Box_collider(Vector3 min, Vector3 max) : b({ min, max }), center((max-min)/2) {}
+
+    bool intersects(const Ray& r) {
+
+        Vector3 inv_d(1.f/r.d.x, 1.f/r.d.y, 1.f/r.d.z);
+        bool sign_dir_x = inv_d.x < 0;
+        bool sign_dir_y = inv_d.y < 0;
+        bool sign_dir_z = inv_d.z < 0;
+
+        double p0 = (b[sign_dir_x].x - r.p.x) * inv_d.x;
+        double p1 = (b[1 - sign_dir_x].x - r.p.x) * inv_d.x;
+        double b0 = (b[sign_dir_y].y - r.p.y) * inv_d.y;
+        double b1 = (b[1 - sign_dir_y].y - r.p.y) * inv_d.y;
+        if ((p0 > b1) || (b0 > p1)) return false;
+        if (b0 > p0) p0 = b0;
+        if (b1 < p1) p1 = b1;
+
+        b0 = (b[sign_dir_z].z - r.p.z) * inv_d.z;
+        b1 = (b[1 - sign_dir_z].z - r.p.z) * inv_d.z;
+        if ((p0 > b1) || (b0 > p1)) return false;
+        if (b0 > p0) p0 = b0;
+        if (b1 < p1) p1 = b1;
+
+        return (p0 < 0 && p1 < 0) ? false : true;
+
+    }
+
+};
+
+//===============================================================//
 // Textures
 //===============================================================//
 /*struct Texture_ref {
@@ -275,11 +315,20 @@ class Object;
 
 struct Collision {
     std::shared_ptr<Object> obj; // Collisioned object.
-    Vector3 normal; // Collisioned object normal.
-    Vector3 point;  // Collision point.
-    double dist;    // Collision distance.
+    Vector3 normal;              // Collisioned object normal.
+    Vector3 point;               // Collision point.
+    double dist;                 // Collision distance.
+
+    Collision()
+        : normal(Vector3()), point(Vector3()), dist(INFINITY) {}
+    Collision(double d)
+        : normal(Vector3()), point(Vector3()), dist(d) {}
+    Collision(Vector3 n, Vector3 p, double d)
+        : normal(n), point(p), dist(d) {}
+
 };
 
+//--------------------------------
 class Object {
 private:
     virtual std::ostream& print(std::ostream& os) = 0; // He tenido que cargarme un 
@@ -289,7 +338,8 @@ private:
 public:
 
     // Object info.
-    Material m;
+    Material m; // Object material.
+    // Box_collider collider; // Object box collider.
 
     Object(Material m = Material()) : m(m) {}
 
@@ -309,9 +359,8 @@ public:
         return m.kd/M_PI;
     }
 
-    virtual double intersects(const Ray& ray) = 0;
-    virtual Vector3 normal(Vector3 wo = Vector3(), Vector3 p = Vector3()) = 0;
-
+    virtual Collision intersects(const Ray& ray) = 0;
+    
     friend std::ostream& operator<<(std::ostream& os, Object& p) {
         return p.print(os);
     }
@@ -351,6 +400,7 @@ public:
     Vector3 n;               // Normal of the plane = (A,B,C).
     std::vector<Vector3> b;  // Vertex bounds of the plane (if finite).
 
+    // Default constructor.
     Plane() {}
 
     // ==========================
@@ -363,7 +413,7 @@ public:
     // Plane defined by a normal and a plane contained point with solid color.
     Plane(Vector3 p, Vector3 n, Material m = Material()) : Object(m) {
         this->n = nor(n);
-        this->D = -this->n*p;
+        this->D = -(this->n)*p;
     }
 
     // Texturized plane defined by a normal and the distance of the plane to the origin.
@@ -392,8 +442,8 @@ public:
     // ==========================
     // Finite plane constructors
     // ==========================
-    Plane(double D, std::vector<Vector3> b, Material m = Material())
-        : Object(m), D(D), n(nor(crs(b[1]-b[0], b[3]-b[0]))), b(b) {}
+    //Plane(double D, std::vector<Vector3> b, Material m = Material())
+    //    : Object(m), D(D), n(nor(crs(b[1]-b[0], b[3]-b[0]))), b(b) {}
 
     Plane(std::vector<Vector3> b, Material m = Material()) : Object(m), b(b) {
         this->n = nor(crs(b[1]-b[0], b[3]-b[0]));
@@ -417,7 +467,7 @@ public:
     }
     */
 
-    double intersects(const Ray& r) override {
+    Collision intersects(const Ray& r) override {
 
         if (n*r.d == 0.f) return {};     // Si la division es 0 no hay corte.
         double t = -(n*r.p + D)/(n*r.d); // Calcula la distancia desde el
@@ -430,8 +480,8 @@ public:
                 n * crs(b[3]-b[2], x-b[2]) < 0 || // Point p inside edge 3 (v3 to v4).
                 n * crs(b[0]-b[3], x-b[3]) < 0)   // Point p inside edge 4 (v4 to v1).
             {
-                return -1;
-            }  
+                return Collision(-1);
+            }
         }
 
         // Texture things.
@@ -458,11 +508,7 @@ public:
         }*/
 
         // Devolver la distancia al punto de corte.
-        return t; 
-    }
-
-    Vector3 normal(Vector3 wo = Vector3(), Vector3 p = Vector3()) override {
-        return (n * wo <= 0) ? n : -n;
+        return Collision(nor((n * r.d <= 0) ? n : -n), x, t);
     }
 
 };
@@ -474,112 +520,124 @@ public:
 class Sphere : public Object {
 private:
 
-    bool solve_quatratic(double a, double b, double c, double& x0, double& x1) {
-        double discr = b * b - 4 * a * c;
-        if (discr < 0) return false;
-        else if (discr == 0) x0 = x1 = - 0.5 * b / a;
-        else {
-            double q = (b > 0) ?
-                -0.5 * (b + sqrt(discr)) :
-                -0.5 * (b - sqrt(discr));
-            x0 = q / a;
-            x1 = c / q;
-        }
-        if (x0 > x1) std::swap(x0, x1);
-
-        return true;
-    }
-
     std::ostream& print(std::ostream& os) override {
         return os << "SPHERE {"
             << "\n  center: "   << center
-            << "\n  radius: "   << r 
+            << "\n  radius: "   << radius
             << "\n  material: " << m
             << "\n}";
     }
+
 public:
-    Vector3 center;
-    double r;
 
-    Sphere(Vector3 center, double r, Material m = Material()) 
-        : Object(m), center(center), r(r) {}
+    Vector3 center; // Sphere center.
+    double radius;  // Sphere radius.
 
-    double intersects(const Ray& ray) override {
+    Sphere(Vector3 center, double radius, Material m = Material()) 
+        : Object(m), center(center), radius(radius) {}
 
-        Vector3 L = ray.p - center;
-        double a = ray.d * ray.d;
-        double b = 2 * ray.d * L;
-        double c = L * L - r * r;
+    Collision intersects(const Ray& r) override {
+
+        Vector3 L = r.p - center;
+        double a = r.d * r.d;
+        double b = 2 * r.d * L;
+        double c = L * L - radius * radius;
         double delta = b*b - 4*a*c;
 
-        if (delta < EPSILON_ERROR) return -1;
+        if (delta < EPSILON_ERROR) return Collision(-1);
         double t0 = (-b - sqrt(delta)) / (2*a);
         double t1 = (-b + sqrt(delta)) / (2*a);
-        if (t0 <= EPSILON_ERROR && t1 <= EPSILON_ERROR) return -1;
-        return t0 > EPSILON_ERROR ? t0 : t1;
+        if (t0 <= EPSILON_ERROR && t1 <= EPSILON_ERROR) return Collision(-1);
+        if (t0 > EPSILON_ERROR) {
+            Vector3 x = r.d * t0 + r.p;
+            return Collision(nor(x-center), x, t0);
+        } else {
+            Vector3 x = r.d * t1 + r.p;
+            return Collision(nor(x-center), x, t1);
+        }
 
-    }
-
-    Vector3 normal(Vector3 wo = Vector3(), Vector3 p = Vector3()) override {
-        return p-center;
     }
 
 };
 
 //===============================================================//
-// Box
+// Cube
 //===============================================================//
 
-class Box : public Object {
+class Cube : public Object {
 private:
     std::ostream& print(std::ostream& os) override {
-        return os << "BOX {"
-            << "\n  bounds: "   << bounds
+        return os << "CUBE {"
+            //<< "\n  bounds: "   << bounds
             << "\n  material: " << m
             << "\n}";
     }
 public:
-    std::vector<Vector3> bounds;
-    Vector3 center;
+    // Cube vertex representation:
+    //        b[5]             max (b[6])
+    //            +-----------+
+    //           /.          /|
+    //     b[1] +-----------+<--- b[2]
+    //          | .         | |
+    //     b[4]-| ..FRONT...|.+ b[7]
+    //          |.          |/
+    //          +-----------+
+    //     min (b[0])         b[3]
+    std::vector<Vector3> v;   // Cube vertex.
+    std::vector<Plane> faces; // Cube faces.
 
-    Box() {}
-    Box(std::vector<Vector3> bounds, Material m = Material())
-        : bounds(bounds), center((bounds[1] - bounds[0])/2) {}
+    // Default constructor.
+    Cube() {}
+    // Cube constructor with the minimum and maximum bounds.
+    Cube(Vector3 min, Vector3 max, Material m = Material()) : Object(m) {
 
-    Box(Vector3 min, Vector3 max, Material m = Material())
-        : Object(m), bounds({ min, max }), center( (max-min)/2) {}
+        // Vertex order:
+        v.push_back(min);                          // v[0]: -x, -y, -z.
+        v.push_back(Vector3(min.x, max.y, min.z)); // v[1]: -x, +y, -z.
+        v.push_back(Vector3(max.x, max.y, min.z)); // v[2]: +x, +y, -z.
+        v.push_back(Vector3(max.x, min.y, min.z)); // v[3]: +x, -y, -z.
+        v.push_back(Vector3(min.x, min.y, max.z)); // v[4]: -x, -y, +z.
+        v.push_back(Vector3(min.x, max.y, max.z)); // v[5]: -x, +y, +z.
+        v.push_back(max);                          // v[6]: +x, +y, +z.
+        v.push_back(Vector3(max.x, min.y, max.z)); // v[7]: +x, -y, +z.
 
-    double intersects(const Ray& ray) override {
-        return -1;
-        /*
-        Vector3 inv_d(1.f/ray.d.x, 1.f/ray.d.y, 1.f/ray.d.z);
-        bool sign_dir_x = inv_d.x < 0;
-        bool sign_dir_y = inv_d.y < 0;
-        bool sign_dir_z = inv_d.z < 0;
+        // Faces order:
+        faces.push_back(Plane({v[0],v[1],v[2],v[3]})); // Front face.
+        faces.push_back(Plane({v[3],v[2],v[6],v[7]})); // Right face.
+        faces.push_back(Plane({v[7],v[6],v[5],v[4]})); // Back face.
+        faces.push_back(Plane({v[4],v[5],v[1],v[0]})); // Left face.
+        faces.push_back(Plane({v[1],v[5],v[6],v[2]})); // Top face.
+        faces.push_back(Plane({v[0],v[4],v[7],v[4]})); // Bottom face.
 
-        double p0 = (bounds[sign_dir_x].x - ray.p.x) * inv_d.x;
-        double p1 = (bounds[1 - sign_dir_x].x - ray.p.x) * inv_d.x;
-        double b0 = (bounds[sign_dir_y].y - ray.p.y) * inv_d.y;
-        double b1 = (bounds[1 - sign_dir_y].y - ray.p.y) * inv_d.y;
-        if ((p0 > b1) || (b0 > p1)) return {};
-        if (b0 > p0) p0 = b0;
-        if (b1 < p1) p1 = b1;
-
-        b0 = (bounds[sign_dir_z].z - ray.p.z) * inv_d.z;
-        b1 = (bounds[1 - sign_dir_z].z - ray.p.z) * inv_d.z;
-        if ((p0 > b1) || (b0 > p1)) return {};
-        if (b0 > p0) p0 = b0;
-        if (b1 < p1) p1 = b1;
-
-        if (p0 < 0) {
-            if (p1 < 0) return {};
-            else return { p1 };
-        } else return { p0 };*/
     }
+    // Cube constructor with each vertice.
+    Cube(std::vector<Vector3> v, Material m = Material()) : Object(m) {
 
-    Vector3 normal(Vector3 wo = Vector3(), Vector3 p = Vector3()) override { 
-        // TODO: corregirlo.
-        return Vector3();
+        // Cube vertices:
+        this->v = v;
+        // Cube faces:
+        faces.push_back(Plane({v[0],v[1],v[2],v[3]})); // Front face.
+        faces.push_back(Plane({v[3],v[2],v[6],v[7]})); // Right face.
+        faces.push_back(Plane({v[7],v[6],v[5],v[4]})); // Back face.
+        faces.push_back(Plane({v[4],v[5],v[1],v[0]})); // Left face.
+        faces.push_back(Plane({v[1],v[5],v[6],v[2]})); // Top face.
+        faces.push_back(Plane({v[0],v[4],v[7],v[4]})); // Bottom face.
+
+    }
+    // Cube constructor with each plane.
+    Cube(std::vector<Plane> faces, Material m = Material())
+        : Object(m), faces(faces) {}
+
+    Collision intersects(const Ray& ray) override {
+
+        Collision c;
+        for (auto& f : faces) {
+            auto t = f.intersects(ray);
+            if (t.dist > 0 && t.dist < c.dist) {
+                c = t;
+            }
+        }
+        return (c.dist != INFINITY) ? c : Collision(-1);
     }
 
 };
@@ -603,15 +661,19 @@ public:
     Triangle(std::vector<Vector3> v, Material m = Material()) 
         : Plane(v[0], crs(v[1]-v[0], v[2]-v[0]), m), v(v) {}
 
-    double intersects(const Ray& r) override {
-        double t;
-        if ((t = Plane::intersects(r)) < 0) return t;
+    Collision intersects(const Ray& r) override {
 
-        Vector3 x = r.d*t + r.p;
-        if (n * crs(v[1]-v[0], x-v[0]) < 0 ||          // Point p inside edge 1 (v1 to v2).
-            n * crs(v[2]-v[1], x-v[1]) < 0 ||          // Point p inside edge 2 (v2 to v3).
-            n * crs(v[0]-v[2], x-v[2]) < 0) return -1; // Point p inside edge 3 (v3 to v1).
-        return t;
+        Collision c;
+        if ((c = Plane::intersects(r)).dist < 0) return c;
+
+        Vector3 x = r.d*c.dist + r.p;
+        if (n * crs(v[1]-v[0], x-v[0]) < 0 || // Point p inside edge 1 (v1 to v2).
+            n * crs(v[2]-v[1], x-v[1]) < 0 || // Point p inside edge 2 (v2 to v3).
+            n * crs(v[0]-v[2], x-v[2]) < 0)   // Point p inside edge 3 (v3 to v1).
+        {
+            return Collision(-1);
+        }
+        return Collision(nor(n), x, c.dist);
     }
 
 };
@@ -623,42 +685,37 @@ private:
         return os << "MESH {"
             << "\n  faces: "        << faces
             << "\n  material: "     << m
-            << "\n  box collider: " << collider
+            //<< "\n  box collider: " << c
             << "\n}";
     }
 
     // Ply metadata
     // nothing for the moment.
-    Box collider;
 
 public:
 
-    Triangle q_dot;
-    std::vector<Triangle> faces;
+    Box_collider collider;       // Mesh box collider.
+    std::vector<Triangle> faces; // Mesh faces.
 
-    Mesh(std::vector<Triangle> faces) : collider(Vector3(INFINITY, INFINITY, INFINITY), 
-        Vector3(-INFINITY, -INFINITY, -INFINITY)), faces(faces)
+    Mesh(std::vector<Triangle> faces, Material m = Material()) 
+        : Object(m), faces(faces)
     {   
         for (auto& f : faces) {
             for (auto& v : f.v) {
-                collider.bounds[0].x = std::min(v.x, collider.bounds[0].x);
-                collider.bounds[0].y = std::min(v.y, collider.bounds[0].y);
-                collider.bounds[0].z = std::min(v.z, collider.bounds[0].z);
-                collider.bounds[1].x = std::max(v.x, collider.bounds[1].x);
-                collider.bounds[1].y = std::max(v.y, collider.bounds[1].y);
-                collider.bounds[1].z = std::max(v.z, collider.bounds[1].z);
+                collider.b[0] = min(collider.b[0], v);
+                collider.b[1] = max(collider.b[1], v);
             }
         }
     }
 
-    Mesh(std::string ply_file, Material m = Material()) : Object(m), 
-        collider(Vector3(INFINITY, INFINITY, INFINITY), Vector3(-INFINITY, -INFINITY, -INFINITY))
-    {
+    Mesh(std::string ply_file, Material m = Material()) : Object(m) {
+
+        // Reading the PLY file:
         std::string s("");
         std::ifstream in(ply_file);
         assert(in.is_open() && "file not found, check it out.");
         std::vector<Vector3> vertex;
-
+        // Reading the PLY header:
         while (s.compare("end_header")) {
             s = get_line(in);
             if (s.find("element vertex") != std::string::npos) {
@@ -673,66 +730,53 @@ public:
         }
         assert(vertex.size() && faces.size() && "no vertex..? no faces..?"); // no bitches..? Sorry
 
-        // Reading the vertex list.
+        // Reading the PLY vertex list:
         for (auto& v : vertex) {
             in >> v;
-            collider.bounds[0].x = std::min(v.x, collider.bounds[0].x);
-            collider.bounds[0].y = std::min(v.y, collider.bounds[0].y);
-            collider.bounds[0].z = std::min(v.z, collider.bounds[0].z);
-            collider.bounds[1].x = std::max(v.x, collider.bounds[1].x);
-            collider.bounds[1].y = std::max(v.y, collider.bounds[1].y);
-            collider.bounds[1].z = std::max(v.z, collider.bounds[1].z);
+            // Defining the mesh collider.
+            collider.b[0] = min(collider.b[0], v);
+            collider.b[1] = max(collider.b[1], v);
         }
 
-        // Reading the faces list.
+        // Reading the PLY faces list.
         int n, v1, v2, v3;
         for (auto& f : faces) {
             in >> n >> v1 >> v2 >> v3;
-            f = Triangle({vertex[v1], vertex[v2], vertex[v3]}, m);
+            f = Triangle({vertex[v1], vertex[v2], vertex[v3]});
         }
     }
 
-    double intersects(const Ray& r) override {
-        /*
-        if (collider.intersects(r).empty()) return {};
-        
-        std::vector<double> ts;
+    Collision intersects(const Ray& r) override {
+        // If the ray doesn't intersects the mesh collider, then it won't
+        // intersect anything, just return no collision.
+        if (!collider.intersects(r)) return Collision(-1);
+
+        // Mesh internal collision.
+        Collision c; 
+        // Calculating possible intersections with the mesh faces:
         for (auto& f : faces) {
-            std::vector<double> tp;
-            if ((tp = f.intersects(r)).size() && tp[0] > 0 && !insert(ts, tp[0])) {
-                q_dot = f;
+            auto t = f.intersects(r);
+            if (t.dist > 0 && t.dist < c.dist) {
+                c = t;
             }
         }
-        return ts;*/
-        return -1;
+        return (c.dist != INFINITY) ? c : Collision(-1);
     }
 
-    // Calcular en que triangulo queda el punto.
-    Vector3 normal(Vector3 wo = Vector3(), Vector3 p = Vector3()) override {
-        return q_dot.n;
-    }
-
-    friend Mesh operator*(Mesh m, Matrix3 transform);
 };
 
 Mesh operator*(Mesh m, Matrix3 transform) {
-    std::vector<Vector3> b{
-        Vector3(INFINITY, INFINITY, INFINITY),
-        Vector3(-INFINITY, -INFINITY, -INFINITY)
-    };
+
+    m.collider = Box_collider();
     for (auto& f : m.faces) {
         for (auto& v : f.v) {
             v.h = 1;
             v = transform * v;
-            b[0].x = std::min(v.x, b[0].x);
-            b[0].y = std::min(v.y, b[0].y);
-            b[0].z = std::min(v.z, b[0].z);
-            b[1].x = std::max(v.x, b[1].x);
-            b[1].y = std::max(v.y, b[1].y);
-            b[1].z = std::max(v.z, b[1].z);
+            m.collider.b[0] = min(m.collider.b[0], v);
+            m.collider.b[1] = max(m.collider.b[1], v);
         }
         f = Triangle(f.v, f.m);
     }
-    m.collider.bounds = b;
     return m;
+
 };

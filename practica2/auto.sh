@@ -1,2 +1,2 @@
 #!/bin/bash
-g++ -O3 main.cpp -g -Wall -I ../libs -std=c++11 -o tone_mapper
+g++ main.cpp -g -I../libs -O3 -std=c++11 -Wall -o tone_mapper

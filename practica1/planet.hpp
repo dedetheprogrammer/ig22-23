@@ -1,6 +1,6 @@
 #pragma once
-#include "geometry.hpp"
 #include <iostream>
+#include "geometry.hpp"
 
 class Planet {
 private:
@@ -11,34 +11,48 @@ private:
     }
 
 public:
-    Vector3 center, reference;
-    Vector3 axis, equator, thirdAxis;
+    Vector3 center;    // Planet center.
+    Vector3 reference; // Planet point-city reference.
+    Vector3 axis;      // Planet axis.
+    Vector3 equator;   // Planet equator.
+    Vector3 cardinal;  // Planet third axis 
 
-    Planet() : center(Vector3()), reference(Vector3()), axis(Vector3()){}
+    // Default constructor.
+    Planet() {}
+    // Assign center, city reference and axis of the planet.
+    Planet(Vector3 axis, Vector3 center, Vector3 reference) {
 
-    Planet(Vector3 axis, Vector3 center, Vector3 reference) : center(center), reference(reference), axis(axis) {
-        Vector3 v = surface_point(reference - center);
+        // Geometrical things:
+        this->center    = center;
+        this->reference = reference;
+        this->axis      = axis;
 
-        equator = crs(v, crs(axis/2, v));
-        equator = equator * (axis/2).mod() / equator.mod();
+        // Planet equator:
+        Vector3 s = surface_point(reference - center);
+        equator = crs(s, crs(axis/2, s));
+        equator = nor(equator, axis.mod()/2);
 
-        thirdAxis = crs(axis/2, equator);
-        thirdAxis = thirdAxis * (axis/2).mod() / thirdAxis.mod();
+        // Planet third axis:
+        cardinal = crs(axis/2, equator);
+        cardinal = nor(cardinal, axis.mod()/2);
     }
 
-    Vector3 getLocalPoint(Vector3 cart_coord) {
-        Vector3 v = surface_point(cart_coord - center);
+    Vector3 get_local_point(Vector3 c_coord) {
 
-        double lat = acos(v.z/v.mod()) * 180/M_PI;
-        double azi = acos(v.x / (sqrt(v.x * v.x + v.y * v.y))) * 180/M_PI;
-        return Vector3(v.mod(), lat, azi);
+        // Fixed surface coordinate.
+        Vector3 s = surface_point(c_coord - center);
+        // Latitude.
+        double lat = acos(s.z/s.mod()) * 180/M_PI;
+        // Azimuth.
+        double azi = acos(s.x / (sqrt(s.x * s.x + s.y * s.y))) * 180/M_PI;
+        return Vector3(s.mod(), lat, azi);
     }
 
-    Vector3 getLocalPoint(double inclination, double azimuth) {
+    Vector3 get_local_point(double inclination, double azimuth) {
         return Vector3(equator.mod(), inclination, azimuth);
     }
 
-    Vector3 getGlobalPoint(double latitude, double azimuth) {
+    Vector3 get_global_point(double latitude, double azimuth) {
         double lat_r = latitude * M_PI/180, azi_r = azimuth * M_PI/180, r = (axis/2).mod();
         //return MatrixBaseChange3D(axis, equator, crs(axis, equator), center) * Vector3();
         return Vector3(r * sin(lat_r) * cos(azi_r), r * sin(lat_r) * sin(azi_r), r * cos(lat_r)) + center;
@@ -46,41 +60,11 @@ public:
 };
 
 std::ostream& operator<<(std::ostream& os, const Planet& s) {
-    return os << "SPHERE {"<< std::endl
-        << " CENTER:    " << s.center << std::endl
-        << " AXIS:      " << s.axis << std::endl
-        << " RADIUS:    " << (s.axis/2).mod() << std::endl
-        << " GREENWICH: " << s.reference << std::endl
-        << " EQUATOR:   " << s.equator << std::endl
+    return os << "PLANET {"<< std::endl
+        << "  Center:    " << s.center << std::endl
+        << "  Axis:      " << s.axis << std::endl
+        << "  Radius:    " << (s.axis/2).mod() << std::endl
+        << "  Greenwich: " << s.reference << std::endl
+        << "  Equator:   " << s.equator << std::endl
         << "}";
-}
-
-std::istream& operator>> (std::istream& is, Planet& s) {
-    Vector3 a, c, r;
-
-    std::cout << "\n  axis (";
-    is >> a; std::cout << ", ";    
-    std::cout << "center (";
-    is >> c; std::cout << ", ";
-    std::cout << "reference (";
-    is >> r; std::cout << std::endl;
-    s = Planet(a, c, r);
-    return is;
-}
-
-void sphere_test() {
-    Planet A(Vector3(5.0, 2.0, 0.0), Vector3(1.0,1.0,1.0), Vector3(2.0, 3.0, 1.0));
-    double a_lat = 45, a_azi = a_lat;
-    Vector3 lpa = A.getLocalPoint(a_lat, a_azi), cpa = A.getGlobalPoint(45, 45);
-    std::cout << A << std::endl;
-    std::cout << "Latitude: " << a_lat << "º, Azimuth: " << a_azi << "º" << std::endl;
-    std::cout << "Polar Coords: " << lpa << std::endl;
-    std::cout << "Carts Coords: " << cpa << std::endl << std::endl;
-    
-    Planet B(Vector3(1,2,2)*2, Vector3(0,0,0), Vector3(2.0,3.0,1.0));
-    std::cout << B << std::endl;
-    Vector3 o(1,2,2), lp = B.getLocalPoint(o), cp = B.getGlobalPoint(lp.y, lp.z);
-    std::cout << "Orign Coords: " << o << std::endl;
-    std::cout << "Polar Coords: " << lp << std::endl;
-    std::cout << "Carts Coords: " << cp << std::endl << std::endl;
 }

@@ -1,2 +1,2 @@
 #!/bin/bash
-g++ main.cpp -O3 -g -I ../libs -std=c++11 -Wall -o ftl_simulator 
+g++ main.cpp -g -I../libs -O3 -std=c++11 -Wall -o practica1

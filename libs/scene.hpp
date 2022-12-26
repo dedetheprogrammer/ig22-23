@@ -94,6 +94,81 @@ struct Camera_settings {
     unsigned long nphotons; // Max number of photons to look for.
     double radius;          // Photon search radius.
 
+    // Default constructor.
+    Camera_settings() {}
+    // Ray tracing camera settings.
+    Camera_settings(std::vector<Vector3> base, int ppp) {
+
+        // Camera geometrical base:
+        center = base[0];
+        left   = base[1];
+        up     = base[2];
+        front  = base[3];
+
+        // Camera pixel base:
+        if (ppp < 0) { ppp = 1; } this->ppp = ppp;
+
+        // Ray tracing settings:
+        m = RAY_TRACING;
+    }
+    // Path tracing camera settings.
+    Camera_settings(std::vector<Vector3> base, int ppp, int RAY_MAX_DEPTH) {
+        
+        // Camera geometrical base:
+        center = base[0];
+        left   = base[1];
+        up     = base[2];
+        front  = base[3];
+
+        // Camera pixel base:
+        if (ppp < 0) { ppp = 1; } this->ppp = ppp;
+
+        // Path tracing settings:
+        m = PATH_TRACING;
+        this->RAY_MAX_DEPTH = RAY_MAX_DEPTH;
+
+    }
+    // Photon mapping camera settings.
+    Camera_settings(std::vector<Vector3> base, int ppp, unsigned long nphotons, double radius) {
+
+        // Camera geometrical base:
+        center = base[0];
+        left   = base[1];
+        up     = base[2];
+        front  = base[3];
+
+        // Camera pixel base:
+        if (ppp < 0) { ppp = 1; } this->ppp = ppp;
+
+        // Photon mapping settings:
+        m = PHOTON_MAPPING;
+        this->nphotons = nphotons;
+        this->radius   = radius;
+
+    }
+    // Free camera settings.
+    Camera_settings(std::vector<Vector3> base, int ppp, Render_mode m, 
+        int RAY_MAX_DEPTH, int nphotons, double radius)
+    {
+        // Camera geometrical base:
+        center = base[0];
+        left   = base[1];
+        up     = base[2];
+        front  = base[3];
+
+        // Camera pixel base:
+        if (ppp < 0) { ppp = 1; } this->ppp = ppp;
+
+        // Render settings:
+        this->m = m;
+        this->RAY_MAX_DEPTH = RAY_MAX_DEPTH;
+        this->nphotons = nphotons;
+        this->radius   = radius;
+
+        
+
+    }
+
 };
 
 std::ostream& operator<<(std::ostream& os, const Camera_settings& s) {
@@ -128,19 +203,18 @@ public:
      */
     inline RGB ray_tracing(Render_params s) {
 
-        // Distance of the closest intersection point.
-        double c_dist = INFINITY;
-        // Closest object.
-        Object_ptr c_obj;
+        // Closest collision.
+        Collision c;
+
         // Calculating possible intersections in the Scene.
         for (auto& o : s.objects) {
             auto t = o->intersects(s.ray);
-            if (t > 0 && t < c_dist) {
-                c_dist = t;
-                c_obj  = o;
+            if (t.dist > 0 && t.dist < c.dist) {
+                c = t;
+                c.obj = o;
             }
         }
-        return c_obj->m.kd;
+        return c.obj->m.kd;
 
     }
 
@@ -153,33 +227,31 @@ public:
     inline RGB path_tracing(Render_params s) {
 
         if (s.depth > ini.RAY_MAX_DEPTH) return RGB();
+
         // Light contributions.
         RGB direct_light_contrib, indirect_light_contrib;
-        // Distance of the closest intersection point.
-        double c_dist = INFINITY;
-        // Closest object.
-        Object_ptr c_obj;
+        // Closest collision.
+        Collision c;
         // Calculating possible intersection with the scene:
         for (auto& o : s.objects) {
             auto t = o->intersects(s.ray);
-            if (t > 0 && t < c_dist) {
-                c_dist = t;
-                c_obj  = o;
+            if (t.dist > 0 && t.dist < c.dist) {
+                c = t;
+                c.obj = o;
             }
         }
         // If the ray doesn't intersect with any object, just return black color.
-        if (c_obj == nullptr) return RGB();
+        if (c.obj == nullptr) return RGB();
         // If the ray intersects with an object with emission, return its light 
         // emission coefficient.
-        if (c_obj->m.ke  > 0) return c_obj->m.ke;
+        if (c.obj->m.ke  > 0) return c.obj->m.ke;
 
         // Montecarlo sample:
-        Vector3 x = s.ray.d * c_dist + s.ray.p, n = nor(c_obj->normal(s.ray.d, x));
-        Sample samp = c_obj->m.scattering(n, s.ray.d,
-            ((s.p_obj == nullptr || s.p_obj == c_obj || c_dist > SHADOW_BIAS) ? 
+        Sample samp = c.obj->m.scattering(c.normal, s.ray.d, 1.0 /*
+            ((s.p_obj == nullptr || s.p_obj == c.obj || c.dist > SHADOW_BIAS) ? 
                 1.0 : 
                 s.p_obj->m.ref_index_i
-            )
+            )*/
         );
 
         // Direct light computation. Delta explanation in Material class
@@ -188,15 +260,14 @@ public:
             for (auto& l : s.lights) {
                 // Shadow ray. See shadow bias explanation in the variable
                 // declaration:
-                Ray lr(x + n * SHADOW_BIAS, l.c - x);
+                Ray lr(c.point + c.normal * SHADOW_BIAS, l.c - c.point);
                 double l_mod = lr.d.mod();
                 if (l_mod == 0.0) continue;
 
                 bool collides = false;
                 for (auto& o : s.objects) {
                     auto t = o->intersects(lr);
-                    Vector3 ln = nor(o->normal(lr.d, lr.d * t + lr.p));
-                    if (t > 0 && t < 1 && (ln * lr.d) < 0) {
+                    if (t.dist > 0 && t.dist < 1 && (t.normal * lr.d) < 0) {
                         collides = true;
                         break;
                     }
@@ -206,8 +277,8 @@ public:
                 // Render equation:
                 direct_light_contrib +=
                     (l.pow / (l_mod * l_mod)) *
-                    c_obj->emission() *
-                    std::abs(n * (lr.d / l_mod));
+                    c.obj->emission() *
+                    std::abs(c.normal * (lr.d / l_mod));
             }
         }
 
@@ -218,7 +289,7 @@ public:
         //  - Refraction.
         //  - More..?
         indirect_light_contrib += path_tracing(
-            Render_params(s.objects, s.lights, Ray(x, samp.wi), c_obj, s.depth+1)
+            Render_params(s.objects, s.lights, Ray(c.point, samp.wi), c.obj, s.depth+1)
         );
 
         return direct_light_contrib + indirect_light_contrib * samp.fr;
@@ -231,57 +302,51 @@ public:
      * @return RGB
      */
     RGB photon_mapping(Render_params s) {
-        
+        return RGB();
+
         // Light contribution.
         RGB photon_light_contrib;
-        // Distance of the closest intersection point.
-        double c_dist = INFINITY;
-        // Closest object.
-        Object_ptr c_obj;
+        // Closest collision.
+        Collision c;
         // Calculating possible intersections in the Scene.
         for (auto& o : s.objects) {
             auto t = o->intersects(s.ray);
-            if (t > 0 && t < c_dist) {
-                c_dist = t;
-                c_obj  = o;
+            if (t.dist > 0 && t.dist < c.dist) {
+                c = t;
+                c.obj = o;
             }
         }
         // If the ray doesn't intersect with any object, just return black color.
-        if (c_obj == nullptr) return RGB();
+        if (c.obj == nullptr) return RGB();
         // If the ray intersects with an object with emission, return its light 
         // emission coefficient.
-        if (c_obj->m.ke  > 0) return c_obj->m.ke;
+        if (c.obj->m.ke  > 0) return c.obj->m.ke;
 
-        // Punto de colisión del rayo sobre el objeto.
-        Vector3 x = s.ray.d * c_dist + s.ray.p, n = nor(c_obj->normal(s.ray.d, x));
-        Sample samp = c_obj->m.scattering(n, s.ray.d, 
+        // Object scattering and sampling:
+        Sample samp = c.obj->m.scattering(c.normal, s.ray.d, 1.0 /*/
             ((s.p_obj == nullptr || s.p_obj == c_obj || c_dist > SHADOW_BIAS) ? 
                 1.0 : 
                 s.p_obj->m.ref_index_i
-            )
+            )*/
         );
         if (samp.fr == 0) return RGB();
         // If the object material is a delta material, we have to follow the ray 
         // path until it intersects with a diffuse object or dies.
         if (samp.is_delta) {
             return photon_mapping(
-                Render_params(s.objects, s.lights, s.pmap, Ray(x, samp.wi), c_obj)
+                Render_params(s.objects, s.lights, s.pmap, Ray(c.point, samp.wi), c.obj)
             ) * samp.fr;
         }
 
-        // (Change this to the camera parameters):
-        // Maximum number of photons to look for:
-        unsigned long nphotons = 100;
         // Maximum distance to look for photons:
-        double rad = 0.05;
         double real_rad = 0;
 
         // Nearest photons to the collision point:
-        auto neighbors = s.pmap.nearest_neighbors(x, nphotons, rad);
+        auto neighbors = s.pmap.nearest_neighbors(c.point, ini.nphotons, ini.radius);
 
         // Compute real radius:
         for (auto& p : neighbors) {
-            double dist = (p->pos - x).mod();
+            double dist = (p->pos - c.point).mod();
             if (dist > real_rad) real_rad = dist;
         }
 
@@ -289,12 +354,12 @@ public:
         for (auto& p : neighbors) {
             // Radial basis function kernel
             // https://towardsdatascience.com/gaussian-process-kernels-96bafb4dd63e
-            double dist = (p->pos - x).mod();
+            double dist = (p->pos - c.point).mod();
             double RBFK = exp(-(dist*dist)/(2*real_rad*real_rad));
 
             photon_light_contrib +=
                 // (c_obj->emission() * (p->flux / (M_PI * rad * rad)));
-                (c_obj->emission() * p->flux * RBFK);
+                (c.obj->emission() * p->flux * RBFK);
         }
 
         return photon_light_contrib;
@@ -307,19 +372,14 @@ public:
 
 public:
 
-    // Camera settings.
-    Camera_settings ini;
-
-    // Camera view.
-    Image view;         // Camera image view.
-  
-    // Other.
-    Progress_bar bar;   // Render progress bar.
+    Camera_settings ini; // Camera settings.
+    Image view;          // Camera image view.
+    Progress_bar bar;    // Render progress bar.
 
     Camera(Camera_settings ini, int width, int height) {
 
         // Camera settings.
-        if (ini.ppp < 1) { ini.ppp = 1; } this->ini = ini;
+        this->ini = ini;
 
         // Camera pixel base.
         p_left = ini.left/width;
@@ -328,37 +388,6 @@ public:
 
         // Camera image view.
         view = Image(width, height, "Camera view");
-
-        // Render progress.
-        bar  = Progress_bar("RENDERING SCENE", 80, width * height, STYLE1, 100);
-
-    }
-
-    Camera(std::vector<Vector3> base, int width, int height, int ppp,
-        Render_mode m, int RAY_MAX_DEPTH, int nphotons, double radius) {
-
-        // Camera geometrical base.
-        ini.center = base[0];
-        ini.left   = base[1];
-        ini.up     = base[2];
-        ini.front  = base[3];
-
-        // Camera pixel base.
-        p_left = ini.left/width;
-        p_up   = ini.up/height;
-        p_ref  = ini.center + (ini.up - p_up) + (ini.left - p_left) + ini.front;
-        if (ppp < 1) { ppp = 1; } ini.ppp = ppp; 
-
-        // Path tracing settings.
-        ini.m = m;
-        ini.RAY_MAX_DEPTH = RAY_MAX_DEPTH;
-
-        // Photon mapping settings.
-        ini.nphotons = nphotons;
-        ini.radius = radius;
-
-        // Camera image view.
-        view = Image(width, height, "Camera View");
 
         // Render progress.
         bar  = Progress_bar("RENDERING SCENE", 80, width * height, STYLE1, 100);
@@ -385,6 +414,7 @@ public:
         // First pixel center as reference.
         auto ref = p_ref;
         // Iterating over camera view pixels:
+
         for (auto& h : view.pixels) {
             for (auto& w : h) {
                 // For ETA purposes.
@@ -461,37 +491,33 @@ private:
                 for (int depth = 0; depth < MAX_PHOTON_DEPTH; depth++) {
                     // If the photon flux is near to 0, just stop iterating.
                     if (flux.rad() < EPSILON_ERROR) break;
-
-                    // Closest distance:
-                    double c_dist = INFINITY;
-                    // Closest object:
-                    Object_ptr c_obj;
+                    // Closest collision.
+                    Collision c;
                     // Calculating possible intersections with the scene:
                     for (auto& o : objects) {
                         auto t = o->intersects(r);
-                        if (t > 0 && t < c_dist) {
-                            c_dist = t;
-                            c_obj  = o;
+                        if (t.dist > 0 && t.dist < c.dist) {
+                            c = t;
+                            c.obj = o;
                         }
                     }
                     // If the photon doesn't intersect with any object of the scene
                     // just stop iterating.
-                    if (c_obj == nullptr) break;
+                    if (c.obj == nullptr) break;
                     // If the photon intersects with an object with light emission, 
                     // stop iterating.
-                    if (c_obj->m.ke  > 0) break;
+                    if (c.obj->m.ke  > 0) break;
 
                     // Colision point.
-                    Vector3 x = r.d * c_dist + r.p, n = nor(c_obj->normal(r.d, x));
-                    Sample samp = c_obj->m.scattering(n, r.d, 1.0);
+                    Sample samp = c.obj->m.scattering(c.normal, r.d);
 
                     // Changing to the new direction.
-                    r = Ray(x, samp.wi);
+                    r = Ray(c.point, samp.wi);
 
                     // Adding a new photon. If is delta material, doesn't make 
                     // sense to store the photon:
                     if (!samp.is_delta) {
-                        photons.push_back(Photon(x, flux, samp.wi));
+                        photons.push_back(Photon(c.point, flux, samp.wi));
                     }
 
                     // New flux resulting of the bounce.
@@ -522,14 +548,16 @@ public:
     // Max bounce photon depth.
     int MAX_PHOTON_DEPTH;
 
+    Scene(std::vector<Camera> cameras, Objects objects)
+        : cameras(cameras), objects(objects) {}
     Scene(std::vector<Camera> cameras, Objects objects, Lights lights)
         : cameras(cameras), objects(objects), lights(lights) {}
     Scene(std::vector<Camera> cameras, Objects objects, Lights lights,
-        int INITIAL_PHOTONS, int MAX_PHOTONS, int MAX_PHOTON_DEPTH)
+        int INITIAL_PHOTONS/*, int MAX_PHOTONS*/, int MAX_PHOTON_DEPTH)
         : cameras(cameras), objects(objects), lights(lights)
     {
         this->INITIAL_PHOTONS = INITIAL_PHOTONS;
-        this->MAX_PHOTONS = MAX_PHOTONS;
+        //this->MAX_PHOTONS = MAX_PHOTONS;
         this->MAX_PHOTON_DEPTH = MAX_PHOTON_DEPTH;
         bar = Progress_bar("CREATING PHOTON MAP", 60, INITIAL_PHOTONS, STYLE1, 50);
         generate_photon_map();

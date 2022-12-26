@@ -1,7 +1,8 @@
 #pragma once
 #include <cassert>
 #include <cmath>   
-#include <iomanip>   
+#include <iomanip>  
+#include <ios> 
 #include <iostream>  
 #include <sstream>
 #include "utils.hpp"
@@ -18,12 +19,27 @@ class RGB {
 private:
     // ...
 public:
+    // Color channels: R(ed), G(reen) and B(lue).
     double R, G, B;
+    // Default constructor.
     RGB() : R(0.0), G(0.0), B(0.0) {}
+    // Assign each channel the same integer value.
     RGB(int C) : R(C/255.0), G(C/255.0), B(C/255.0) {}
+    // Assign different integer values to each channel.
     RGB(int R, int G, int B) : R(R/255.0), G(G/255.0), B(B/255.0) {}
+    // Assign each channel the same decimal value.
     RGB(double C) : R(C), G(C), B(C) {}
+    // Assign different decimal values to each channel.
     RGB(double R, double G, double B) : R(R), G(G), B(B) {}
+    // Assign the HEX value to the RGB channels.
+    RGB(std::string hex) {
+        int r, g, b;
+        if (hex[0] != '#') hex = "#" + hex;
+        std::sscanf(hex.c_str(), "#%02x%02x%02x", &r, &g, &b);
+        R = r / 255.0;
+        G = r / 255.0;
+        B = r / 255.0;
+    }
 
     double rad() const {
         return (R + G + B) / 3;

@@ -206,6 +206,16 @@ std::vector<Vector3> orthonormal_basis(const Vector3& n) {
 
 }
 
+// Min values between two vectors.
+Vector3 min(const Vector3& a, const Vector3& b) {
+    return Vector3(std::min(a.x, b.x), std::min(a.y, b.y), std::min(a.z, b.z));
+}
+
+// Max values between two vectors.
+Vector3 max(const Vector3& a, const Vector3& b) {
+    return Vector3(std::max(a.x, b.x), std::max(a.y, b.y), std::max(a.z, b.z));
+}
+
 // Print vector out.
 std::ostream& operator<<(std::ostream& os, const Vector3& v) {
     return os << "(" << v.x << "," << v.y << "," << v.z << ")";

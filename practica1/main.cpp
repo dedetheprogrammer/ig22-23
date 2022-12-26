@@ -1,31 +1,33 @@
 #include "geometry.hpp"
 #include "planet.hpp"
 
-void geometry_test(bool verbose = false) {
-    // Vector3 tests.
-    std::cout << "== PRUEBA DE VECTOR3 =================" << std::endl;
+int main (int argc, char* argv[]) {
+
+    std::cout << "Welcome to the FTL Enterprises Interplanetary Simulator\n";
+    std::cout << "First, some test to check the system...\n";
+
+    std::cout << "= GEOMETRY TESTS =======================\n";
+    // Vector3 evaluation.
+    std::cout << "== VECTOR3 TESTS =======================\n";
     double s = 0.5;
     Vector3 a(1.0,1.0,1.0), b(5.0,4.0,4.5), d(2.0, 2.0, 2.0), v(2.0, -2.0, 0.0), w = crs(d,v);
+    std::cout << "Params: " << a << ", " << b << " and the scalar: " << s << "\n";
+    std::cout << "Add: " << a+b      << std::endl;
+    std::cout << "Sub: " << a-b      << std::endl;
+    std::cout << "Mul: " << a*s      << std::endl;
+    std::cout << "Div: " << a/s      << std::endl;
+    std::cout << "Mod: " << a.mod()  << std::endl;
+    std::cout << "Nor: " << nor(a)   << std::endl;
+    std::cout << "Grd: " << a/b      << std::endl;
+    std::cout << "Dot: " << a*b      << std::endl;
+    std::cout << "Crs: " << crs(a,b) << std::endl;
 
-    if (verbose) { std::cout << "Params: " << a << ", " << b << ", " << s << std::endl; }
-    if (verbose) { std::cout << "Add: " << a+b      << std::endl; } assert((a+b) == Vector3(6,5,5.5));
-    if (verbose) { std::cout << "Sub: " << a-b      << std::endl; } assert((a-b) == Vector3(-4,-3,-3.5));
-    if (verbose) { std::cout << "Mul: " << a*s      << std::endl; } assert((a*s) == Vector3(0.5,0.5,0.5));
-    if (verbose) { std::cout << "Div: " << a/s      << std::endl; } assert((a/s) == Vector3(2,2,2));
-    if (verbose) { std::cout << "Mod: " << a.mod()  << std::endl; } assert(a.mod() - sqrt(3) < EPSILON_ERROR);
-    if (verbose) { std::cout << "Nor: " << nor(a)   << std::endl; } assert(nor(a) == (a/a.mod()));
-    if (verbose) { std::cout << "Grd: " << a/b      << std::endl; }
-    if (verbose) { std::cout << "Dot: " << a*b      << std::endl; } assert(a*b == 13.5);
-    if (verbose) { std::cout << "Crs: " << crs(a,b) << std::endl; } assert(crs(a,b) == Vector3(0.5,0.5,-1));
-    std::cout << "------> OK\n";
-
-    // Matrices tests.
-    std::cout << "== PRUEBA DE MATRICES =======================" << std::endl;
-    double A[4][4] = {{3,4,7,8},{3,2,8,7},{0,2,6,7},{4,2,2,1}};
-    double B[4][4] = {{8,7,6,5},{2,4,2,1},{1,1,3,4},{7,8,9,0}};
-
-    Matrix3 mA(A);
-    Matrix3 mB(B);
+    // Matrix3 evaluation.
+    std::cout << "== MATRIX3 TESTS =======================\n";
+    double ma[4][4] = {{3,4,7,8},{3,2,8,7},{0,2,6,7},{4,2,2,1}};
+    double mb[4][4] = {{8,7,6,5},{2,4,2,1},{1,1,3,4},{7,8,9,0}};
+    Matrix3 mA(ma);
+    Matrix3 mB(mb);
     Matrix3 mC = mA * mB;
     Matrix3 mD = mC.invert();
     Matrix3Translation mT(3,5,7);
@@ -41,82 +43,88 @@ void geometry_test(bool verbose = false) {
     std::cout << "Rotation Matrix mR: " << mR << std::endl;
     std::cout << "Base change Matrix mBC: " << mBC << std::endl;
 
-    // Transformations tests.
+    // Matrix3 transforms evaluation.
+    std::cout << "== MATRIX3 TRANSFORMATIONS TESTS =======\n";
     Vector3 hp(b, 1);
     Vector3 hd(d, 0);
-    std::cout << "== PRUEBA DE TRANSFORMACIONES ===============" << std::endl;
-    std::cout << "== TRASLACION" << std::endl;
+    std::cout << "== TRASLATION" << std::endl;
     std::cout << "Point traslation: " << mT * hp << std::endl;
     std::cout << "Vector traslation: " << mT * hd << std::endl;
 
-    std::cout << "== ESCALADO" << std::endl;
+    std::cout << "== SCALING" << std::endl;
     std::cout << "Point scaling: " << mS * hp << std::endl;
     std::cout << "Vector scaling: " << mS * hd << std::endl;
     
-    std::cout << "==ROTATION" << std::endl;
+    std::cout << "== ROTATION" << std::endl;
     std::cout << "Point rotation: " << mR * hp << std::endl;
     std::cout << "Vector rotation: " << mR * hd << std::endl;
 
-    std::cout << "== CAMBIO DE BASE" << std::endl;
+    std::cout << "== BASE CHANGE" << std::endl;
     std::cout << "Point base change: " << mBC * hp << std::endl;
     std::cout << "(No sense) Vector base change: " << mBC * hd << std::endl;
 
     Vector3 hc = mT * mS * hp;
     std::cout << "Point traslation + rotation: " << hc << std::endl;
     std::cout << "Recover original point: " << (mT * mS).invert() * hc << std::endl;
-}
 
-void fatal_death(Planet planeta1, int inclination1, int azymuth1, Planet planeta2, int inclination2, int azymuth2) {
-    Vector3 estacion1 = planeta1.getGlobalPoint(inclination1,azymuth1);
-    Vector3 estacion2 = planeta2.getGlobalPoint(inclination2,azymuth2);
-    std::cout << estacion1 << " " << estacion2 << std::endl;
-    Vector3 AB(estacion2 - estacion1);
-    Matrix3BaseChange p1Coor(planeta1.axis, planeta1.equator, planeta1.thirdAxis, planeta1.center),
-        p2Coor(planeta2.axis, planeta2.equator, planeta2.thirdAxis, planeta2.center);
+    // Planet geometry evaluation:
+    std::cout << "== PLANET GEOMETRY TESTS ===============\n";
+    Planet pA(Vector3(5.0, 2.0, 0.0), Vector3(1.0,1.0,1.0), Vector3(2.0, 3.0, 1.0));
+    double a_lat = 45, a_azi = a_lat;
+    Vector3 lpa = pA.get_local_point(a_lat, a_azi), cpa = pA.get_global_point(45, 45);
+    std::cout << pA
+        << "\nLatitude: " << a_lat << "º, Azimuth: " << a_azi << "º"
+        << "\nPolar Coords: " << lpa
+        << "\nCarts Coords: " << cpa << "\n\n";
+    
+    Planet pB(Vector3(1,2,2)*2, Vector3(0,0,0), Vector3(2.0,3.0,1.0));
+    Vector3 o(1,2,2), lp = pB.get_local_point(o), cp = pB.get_global_point(lp.y, lp.z);
+    std::cout << pB 
+        << "\nOrign Coords: " << o
+        << "\nPolar Coords: " << lp
+        << "\nCarts Coords: " << cp << "\n\n";
 
-    Vector3 ABp1 = p1Coor*AB;
-    Vector3 ABp2 = p2Coor*AB;
+    // Trajectory Evaluation:
+    std::cout << "== PLANET COLLISION ====================\n";
+    // Latitudes and azimthus in degrees:
+    double lat_A = 80;  // Planet A latitude.
+    double azi_A = 160; // Planet A azimuth.
+    double lat_B = 45;  // Planet B latitude.
+    double azi_B = 35;  // Planet B azimuth.
+    // Planets:
+    Planet A(Vector3(1,1,1), Vector3(0,0,0), Vector3(2,2,2)); // Planet A.
+    Planet B(Vector3(1,1,1), Vector3(5,5,5), Vector3(7,7,7)); // Planet B.
+    std::cout << "Parameters:\n"
+        << A << "\n"
+        << "Planet A latitude: " << lat_A << " and azimuth: " << azi_A << "\n"
+        << B << "\n"
+        << "Planet B latitude: " << lat_B << " and azimuth: " << azi_B << "\n";
 
-    // Si la dirección de lanzamiento transformada al sistema de coordenadas del planeta 1 tiene componente hy negativa,
-    // significa geométricamente que la dirección de lanzamiento es hacia dentro del planeta, por lo que hay choque.
-    if (ABp1.y < 0) {
+    Vector3 station_A = A.get_global_point(lat_A,azi_A);
+    Vector3 station_B = B.get_global_point(lat_B,azi_B);
+    Vector3 traject(station_B - station_A);
+    std::cout << "Station A: " << station_A 
+        << ", station B: " << station_B 
+        << ", trajectory: " << traject << "\n";
+    
+    Matrix3BaseChange coor_A(A.axis, A.equator, A.cardinal, A.center);
+    Matrix3BaseChange coor_B(B.axis, B.equator, B.cardinal, B.center);
+    Vector3 local_A = coor_A*traject;
+    Vector3 local_B = coor_B*traject;
+
+    // If the y component of the Planet A local coordinate system is negative,
+    // that means that the launch direction is towards the planet, then boom.
+    if (local_A.y < 0) {
         std::cout << "Ha habido choque con el planeta 1" << std::endl;
     }
-    // Si la dirección de lanzamiento transformada al sistema de coordenadas del planeta 2 tiene componente hy positiva,
-    // significa geométricamente que la dirección de lanzamiento proviene desde dentro del planeta hacia fuera, atravesandolo, por lo que hay choque.
-    if (ABp2.y > 0) {
+    // If the y component of the Planet B local coordinates system is positive,
+    // that means that the launch direction comes from inside the planet, then boom.
+    if (local_B.y > 0) {
         std::cout << "Ha habido choque con el planeta 2" << std::endl;
     }
-    // Si la dirección de lanzamiento tiene componente hy positiva vista desde el planeta 1, y negativa vista desde el planeta 2,
-    // Significa que el lanzamiento se expulsa hacia fuera del planeta 1 y llega desde fuera del planeta 2, por lo que no hay choque.
-    if (ABp1.y >= 0 && ABp2.y <= 0) {
+    // If both of above are false, then it means that the launch was succesful
+    // and there won't be any boom.
+    if (local_A.y >= 0 && local_B.y <= 0) {
         std::cout << "No ha habido choque" << std::endl;
     }
-}
-
-int main (int argc, char* argv[]) {
-    // Hay error si metes Latitud y Azimuth 90º en ambos planetas. Por? Ni idea.
-    // Tengo que probar el get global point pero con matriz de transformación.
-    // Si hay sugerencia de alternativas de nombre de Matrix3, soy todo oidos.
-    Planet A(Vector3(1,1,1), Vector3(0,0,0), Vector3(2,2,2)), 
-        B(Vector3(1,1,1), Vector3(5,5,5), Vector3(7,7,7));
-    double latA, aziA, latB, aziB;
-
-    // PLANET A:
-    std::cout << "Welcome to the FTL Enterprises Interplanetary Simulator" << std::endl;
-    //std::cout << "Introduce Planet A {";
-    //std::cin >> A; std::cout << "} " << std::endl;
-    std::cout << "Introduce Station A latitude: "; std::cin >> latA;
-    std::cout << "Introduce Station A azimuth: ";  std::cin >> aziA;
-    std::cout << std::endl;
-
-    // PLANET B:
-    //std::cout << "Introduce Planet B {";
-    //std::cin >> B; std::cout << "} " << std::endl;
-    std::cout << "Introduce Station B latitude: "; std::cin >> latB;
-    std::cout << "Introduce Station B azimuth: ";  std::cin >> aziB;
-    std::cout << std::endl;
-
-    // Trayectory Evaluation:
-    fatal_death(A, latA, aziA, B, latB, aziB);
 }
