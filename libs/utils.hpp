@@ -1,4 +1,7 @@
 #pragma once
+#ifndef UTILS_H
+#define UTILS_H
+
 #include <chrono>
 #include <fstream>
 #include <iterator>
@@ -6,8 +9,23 @@
 #include <random>
 #include <regex>
 #include <string>
+#include <sstream>
 #include <thread>
 #include <vector>
+
+//===============================================================//
+// System
+//===============================================================//
+void debug(bool condition, std::string info, int status = -1) {
+    if (condition) {
+        if (status == -1) {
+            std::cerr << "warning: " << info << "\n";
+        } else {
+            std::cerr << "error: " << info << "\n";
+            exit(status);
+        }
+    }
+}
 
 //===============================================================//
 // Random
@@ -52,17 +70,6 @@ public:
 };
 
 //===============================================================//
-// Operation utils
-//===============================================================//
-
-template <typename T>
-void swap(T& a, T& b) {
-    a = a + b;
-    b = a - b;
-    a = a - b;
-}
-
-//===============================================================//
 // String utils
 //===============================================================//
 
@@ -91,9 +98,9 @@ std::vector<std::string> tokenize(std::string s, std::string delimiter = " ") {
  * @param n Indentation.
  * @return std::string 
  */
-std::string tabulate(std::string tab, int n) {
-    std::string tabulated = tab;
-    for (int i = 1; i < n; i++) {
+std::string bleeding(std::string tab, int n) {
+    std::string tabulated = "";
+    for (int i = 0; i < n; i++) {
         tabulated += tab;
     }
     return tabulated;
@@ -174,7 +181,6 @@ std::string get_filename(std::string path) {
 //===============================================================//
 
 // Elapsed time.
-
 std::string elapsed_time(std::chrono::seconds s) {
 
     auto h = std::chrono::duration_cast<std::chrono::hours>  (s); s -= h;
@@ -205,7 +211,7 @@ const Color white  = "\033[0m";
 
 using Style = std::vector<std::string>;
 const Style STYLE1 = {"=",">"," "};
-const Style STYLE2 = {"█",">","▒"};
+const Style STYLE2 = {"#",">","_"};
 
 class Progress_bar {
 private:
@@ -213,6 +219,7 @@ private:
     int c_progress;  // Current progress.
     int t_progress;  // Top progress.
                      // Symbols to be drawn.
+    bool initialized = false;
     std::vector<std::string> style;
                      // - [0]: solid bar filling.
                      // - [1]: Current position pointer symbol.
@@ -220,33 +227,39 @@ private:
     std::string eta;
                      // Interval time between refresh.
     std::chrono::milliseconds update_t;
-    std::chrono::steady_clock::time_point p;
-    // std::chrono::seconds eta;
-    // std::mutex m; // Mutex for threaded progress bar. 
+    std::chrono::steady_clock::time_point task_start;
+    std::chrono::steady_clock::time_point timer;
+
 public:
 
     Progress_bar() {};
-    Progress_bar(std::string task, int bar_width, int t_progress, 
-        std::vector<std::string> style, int update_t)
-    {
-        std::cout << "[" << task << "]\n";
+    Progress_bar(int bar_width, std::vector<std::string> style, int update_t) {
         this->bar_width  = bar_width;
+        this->style = style;
+        this->update_t = std::chrono::milliseconds(update_t);
+    }
+
+    void init(std::ostream& os, std::string task, int t_progress) {
+        initialized = true;
+        os << "[ STARTING " << task << "... ]\n";
         this->c_progress = 0;
         this->t_progress = t_progress;
-        this->style = style;
         this->eta = "NA:NA:NA";
-        this->update_t = std::chrono::milliseconds(update_t);
-        this->p = now();
-
+        task_start = timer = now();
     }
 
     void update(std::ostream& os, std::chrono::nanoseconds time) {
 
+        if (!initialized) {
+            std::cerr << "warning: the progress bar has not been initialized.\n";
+            return;
+        }
+
         double progress  = ((double) ++c_progress / (double)t_progress);
 
         auto n = now();
-        if (std::chrono::duration_cast<std::chrono::milliseconds>(n - p) > update_t) {
-            p = n;
+        if (std::chrono::duration_cast<std::chrono::milliseconds>(n - timer) > update_t) {
+            timer = n;
             time *= (t_progress - c_progress);
             eta = elapsed_time(std::chrono::duration_cast<std::chrono::seconds>(time));
         }
@@ -265,5 +278,15 @@ public:
         os << s_bar;
         os.flush();
     }
+
+    void kill(std::ostream& os) {
+        flush_stream(os);
+        os << "FINISHED IN "
+            << elapsed_time(std::chrono::duration_cast<std::chrono::seconds>(now() - task_start))
+            << std::endl;
+        initialized = false;
+    }
     
 };
+
+#endif

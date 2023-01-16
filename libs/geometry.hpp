@@ -4,6 +4,8 @@
 
 #include <cmath>
 #include <iostream>
+#include <string>
+#include <vector>
 
 #ifndef M_PI
     #define M_PI 3.14159265358979323846
@@ -13,8 +15,109 @@
 enum Rotation { X_ROT = 0x1, Y_ROT = 0x2, Z_ROT = 0x4 };
 
 //===============================================================//
+// Vector2: 2d vector
+//===============================================================//
+/**
+ * @brief Three dimension vector. Four components:
+ *  - Coordinate x.
+ *  - Coordinate y.
+ *  - Homogeneous coordinate h. Used for matrix transformators:
+ *      - 0 if Direction.
+ *      - 1 if Point.
+ */
+class Vector2 {
+private:
+
+    // Para limpiar números feos que se generen por redondeo o por 
+    // operaciones matemáticas. Me da muchisimo toc ver un 0 negativo
+    // o un número elevado a la -12.
+    void clean() {
+        if (std::abs(x) < EPSILON_ERROR || x == -0) x = 0;
+        if (std::abs(y) < EPSILON_ERROR || y == -0) y = 0;
+    }
+
+public:
+
+    double x, y, h;
+
+    Vector2 (double x = 0, double y = 0)
+        : x(x), y(y), h(0) { clean(); }
+    Vector2 (double x, double y, int h)
+        : x(x), y(y), h(h) { clean(); }
+    Vector2 (Vector2 v, int h)
+        : x(v.x), y(v.y), h(h) { clean(); }
+    Vector2 (double m[3])
+        : x(m[0]), y(m[1]), h(m[2]) { clean(); }
+
+    // Vector module
+    double mod() const {
+        return sqrt((x * x) + (y * y));
+    }
+
+    std::string to_string(const Vector2& v) {
+        return "(" + std::to_string(v.x) + ","
+                   + std::to_string(v.y)
+             + ")";
+    }
+
+    // Vector asignation.
+    void operator=(Vector2 v) {
+        x = v.x;
+        y = v.y;
+        clean();
+    }
+
+    // Vector add.
+    void operator+=(Vector2 v) {
+        x += v.x;
+        y += v.y;
+    }
+
+    // Vector substract.
+    void operator-=(Vector2 v) {
+        x -= v.x;
+        y -= v.y;
+    }
+
+    void operator*=(double d) {
+        x *= d;
+        y *= d;
+    }
+
+    const double& operator[](size_t i) const {
+        if (i == 0) {
+            return x;
+        } else if (i == 1) {
+            return y;
+        }
+    }
+
+};
+
+// Vector scalar product.
+Vector2 operator*(Vector2 v, double d) {
+    return Vector2(v.x * d, v.y * d);
+}
+
+// Vector scalar product.
+Vector2 operator*(double d, Vector2 v) {
+    return v*d;
+}
+
+// Vector out.
+std::ostream& operator<<(std::ostream& os, const Vector2& v) {
+    return os << "(" << v.x << "," << v.y << ")";
+}
+
+// Vector in.
+void operator>>(std::istream& in, Vector2& v) {
+    in >> v.x >> v.y;
+}
+
+//===============================================================//
 // Vector3: 3d vector
 //===============================================================//
+
 /**
  * @brief Three dimension vector. Four components:
  *  - Coordinate x.
@@ -52,6 +155,13 @@ public:
     // Vector module
     double mod() const {
         return sqrt((x * x) + (y * y) + (z * z));
+    }
+
+    std::string to_string(const Vector3& v) {
+        return "(" + std::to_string(v.x) + ","
+                   + std::to_string(v.y) + ","
+                   + std::to_string(v.z)
+             + ")";
     }
 
     // Vector asignation.
@@ -154,9 +264,9 @@ double grd(Vector3 v, Vector3 w) {
 
 // Vector equality.
 bool operator==(Vector3 v, Vector3 w) {
-    return (v.x - w.x < EPSILON_ERROR) 
-        && (v.y - w.y < EPSILON_ERROR)
-        && (v.z - w.z < EPSILON_ERROR);
+    return (std::abs(v.x - w.x) < EPSILON_ERROR) 
+        && (std::abs(v.y - w.y) < EPSILON_ERROR)
+        && (std::abs(v.z - w.z) < EPSILON_ERROR);
 }
 
 // Vector inequality.
@@ -216,12 +326,12 @@ Vector3 max(const Vector3& a, const Vector3& b) {
     return Vector3(std::max(a.x, b.x), std::max(a.y, b.y), std::max(a.z, b.z));
 }
 
-// Print vector out.
+// Vector out.
 std::ostream& operator<<(std::ostream& os, const Vector3& v) {
     return os << "(" << v.x << "," << v.y << "," << v.z << ")";
 }
 
-// Initialize vector.
+// Vector in.
 void operator>>(std::istream& in, Vector3& v) {
     in >> v.x >> v.y >> v.z;
 }
@@ -334,6 +444,18 @@ public:
         }
         return Matrix3(aux);
     }
+
+    void nor() {
+        double det = det3(m, 4);
+        if (det > 0) {
+            for (int i = 0; i < 4; i++) {
+                for (int j = 0; j < 4; j++) {
+                    m[i][j] /= det;
+                }
+            }
+        }
+    }
+
 };
 
 // Matrix product.
@@ -385,6 +507,12 @@ public:
         m[0][3] = tx;
         m[1][3] = ty;
         m[2][3] = tz;
+    }
+
+    Matrix3Translation(Vector3 t) {
+        m[0][3] = t.x;
+        m[1][3] = t.y;
+        m[2][3] = t.z;
     }
 
     Matrix3 invert() override {
@@ -476,6 +604,7 @@ class Matrix3BaseChange : public Matrix3 {
 private:
     // ...
 public:
+    Matrix3BaseChange() {}
     Matrix3BaseChange(Vector3 u, Vector3 v, Vector3 w, Vector3 o) {
         m[0][0] = u.x; m[0][1] = v.x; m[0][2] = w.x; m[0][3] = o.x;
         m[1][0] = u.y; m[1][1] = v.y; m[1][2] = w.y; m[1][3] = o.y;

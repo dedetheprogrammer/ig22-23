@@ -1,4 +1,7 @@
 #pragma once
+#ifndef OBJECTS_H
+#define OBJECTS_H
+
 #include <algorithm>
 #include <random>
 #include "geometry.hpp"
@@ -43,59 +46,131 @@ public:
 
     }
 
+    void print(std::ostream& os, int i) {
+        std::string s = bleeding("  ", i);
+        os << s + "BOX COLLIDER {"
+            << "\n" + s + "  bounds {" << b[0] << ", " << b[1] << " }"
+            << "\n" + s + "  center: " << center
+            << "\n" + s + "}\n";
+    }
+
 };
+
+class Object;
+
+struct Collision {
+    std::shared_ptr<Object> obj; // Collisioned object.
+    Vector3 normal;              // Collisioned object normal.
+    Vector3 point;               // Collision point.
+    double dist;                 // Collision distance.
+
+    Vector3 wo;
+    Vector3 wi;              // To store the bounce's directions
+
+    Collision()
+        : normal(Vector3()), point(Vector3()), dist(INFINITY) {}
+    Collision(double d)
+        : normal(Vector3()), point(Vector3()), dist(d) {}
+    Collision(Vector3 n, Vector3 p, double d)
+        : normal(n), point(p), dist(d) {}
+
+};
+
+//===============================================================//
+// UV Coordinates
+//===============================================================//
+using VectorUV = Vector2;
+
+struct Bounds {
+    // Spheres
+    Vector3 c;
+    double r = 0;  // Stored for performance
+    // Spheres and Unbounded planes
+    Vector3 normal;
+    // Planes
+    double D = 0.0;
+    // Bounded planes
+    std::vector<Vector3> vP;    // Vertice positions
+    std::vector<Vector3> vN;    // Vertice normals
+    std::vector<VectorUV> vUV;  // Vertice UV coordinates
+
+    // Default
+    Bounds() {}
+    // Spheres
+    Bounds(Vector3 c, Vector3 axis) : c(c), r(axis.mod()), normal(nor(axis)) {}
+    // Unbounded planes
+    Bounds(Vector3 normal, double D) : normal(normal), D(D) {}
+    // Bounded planes
+    Bounds(std::vector<Vector3> vP) : vP(vP) {}
+    Bounds(std::vector<Vector3> vP, std::vector<Vector3> vN) : vP(vP), vN(vN) {}
+    Bounds(std::vector<Vector3> vP, std::vector<VectorUV> vUV) : vP(vP), vUV(vUV) {}
+    Bounds(std::vector<Vector3> vP, std::vector<Vector3> vN, std::vector<VectorUV> vUV) : vP(vP), vN(vN), vUV(vUV) {}
+};
+
+VectorUV polyPoint_2_UV(Bounds& b, const Vector3& n, const Vector3& p) {
+    VectorUV result;
+    // if sphere (radius > 0) note: radius is by default 0
+    if (b.r > EPSILON_ERROR) {
+        double phi = atan2(p.y - b.c.y, p.x - b.c.x);
+        double theta = acos((p.z - b.c.z) / b.r);
+
+        result.x = b.r * (phi / 2*M_PI);
+        result.y = b.r * ((M_PI - theta) / M_PI);
+    } else {
+        std::vector<double> barycentric(b.vP.size());
+
+        // barycentric[i] = (dot(N, V[i]->P)) / sum (dot(N, V[0]->V[i]))
+        double denom = 0;
+        for (unsigned int i = 1; i < b.vP.size(); i++) {
+            denom += n * (b.vP[i] - b.vP[0]);
+        }
+        for (unsigned int i = 0; i < barycentric.size(); i++) {
+            barycentric[i] = (n * (p - b.vP[i])) / denom;
+        }
+
+        if (b.vUV.empty()) {
+            if (b.vP.size() == 3) {
+                b.vUV.push_back(VectorUV(0.0,1.0));
+                b.vUV.push_back(VectorUV(1.0,1.0));
+                b.vUV.push_back(VectorUV(0.0,0.0));
+            }
+            else if (b.vP.size() == 4) {
+                b.vUV.push_back(VectorUV(0.0,1.0));
+                b.vUV.push_back(VectorUV(1.0,1.0));
+                b.vUV.push_back(VectorUV(1.0,0.0));
+                b.vUV.push_back(VectorUV(0.0,0.0));
+            }
+        }
+        
+        debug(b.vUV.size() != b.vP.size(), "El objeto no tiene tantas coordenadas UV como vértices");
+
+        //UV_P = sum(barycentric[i] * UV[i])
+        for (unsigned int i = 0; i < barycentric.size(); i++) {
+            result += barycentric[i] * b.vUV[i];
+        }
+    }
+    return result;
+}
 
 //===============================================================//
 // Textures
 //===============================================================//
-/*struct Texture_ref {
-    
-    // Texture start reference.
-    Vector3 p;
-    bool point_ref;
-
-    // Texture dimension.
-    int r_flags;
-    std::vector<double> r_vals;
-
-    Texture_ref(int r_flags, std::vector<double> r_vals)
-        : point_ref(false), r_flags(r_flags), r_vals(r_vals) {}
-
-    Texture_ref(Vector3 p, int r_flags, std::vector<double> r_vals)
-        : p(p), point_ref(true), r_flags(r_flags), r_vals(r_vals) {}
-
-};
-
 class Texture {
 private:
-
-    struct Quad {
-    private:
-        //...
-    public:
-        bool alpha;
-        RGB  color;
-    };
-
 public:
-    int width;
-    int height;
-    std::vector<std::vector<Quad>> quads;
-
-    Texture() {}
-    Texture(Image i) {
-        this->width  = i.width;
-        this->height = i.height;
-        quads = std::vector<std::vector<Quad>>(height, std::vector<Quad>(width));
-        for (int h = 0; h < i.height; h++) {
-            for (int w = 0; w < i.width; w++) {
-                quads[h][w] = Quad{i.has_color_key && i.color_key == i.pixels[h][w],
-                    i.pixels[h][w]};
-            }
-        }
+    Image i;
+    Texture(std::string path) : i(path) {}
+    RGB getValue (VectorUV uv) const
+    {
+        int indexu = uint32_t(uv.x * i.width) % i.width;
+        int indexv = uint32_t(uv.y * i.height) % i.height;
+        RGB color = i.pixels[indexu][indexv];
+        return color;
     }
-
-};*/
+    RGB getValue (Bounds& b, const Vector3& n, const Vector3& p) const {
+        return getValue(polyPoint_2_UV(b,n,p));
+    }
+};
 
 //===============================================================//
 // Materials
@@ -124,73 +199,110 @@ struct Sample {
         : wi(wi), fr(fr), is_delta(is_delta) {}
 };
 
+class BXDF {
+private:
+    bool has_tex;
+    std::shared_ptr<Texture> tex;
+    RGB val;
+public:
+    double p;
+public:
+    BXDF() {}
+    BXDF(RGB k) : has_tex(false), val(k), p(max(k)) {}
+    BXDF(std::shared_ptr<Texture> t, double p = 0.9) : has_tex(true), tex(t), val(RGB()), p(p) {}
+
+    // RGB operator() () const {
+    //     return val;
+    // }
+
+    RGB operator() (Bounds& b, const Vector3& n, const Vector3& p, const Vector3& wi, const Vector3& wo) const {
+
+        if (has_tex) return tex->getValue(b,n,p);
+        else return val;
+    }
+
+    std::ostream& print(std::ostream& os) const {
+        if (has_tex) return os << "texture: " + tex->i.name;
+        else return os << val << ", " << p*100 << "%";
+    }
+};
+
+std::ostream& operator<<(std::ostream& os, const BXDF& bxdf) {
+    return bxdf.print(os);
+}
+
 class Material {
 private:
 
     // First version before Fresnell.
     void coefficient_correction() {
 
-        pd = max(kd);
-        ps = max(ks);
-        pt = max(kt);
+        // coefficients have been initialized on constructor
 
-        double coeff = pd + ps + pt;
+        double coeff = kd.p + ks.p + kt.p;
         if (coeff > 1) {
-            pd /= coeff;
-            ps /= coeff;
-            pt /= coeff;
+            kd.p /= coeff;
+            ks.p /= coeff;
+            kt.p /= coeff;
         }
     }
 
-    // etat = ref_index_i, etai = ref_index_o.
-    double fresnel_coefficients(Vector3& n, Vector3 wo, double ref_index_o, double ref_index_i) {
-        
-        if ((n * wo) > 0) {
-            n *= -1;
-            std::swap(ref_index_o, ref_index_i);
-        }
-        wo = nor(wo);
-        double ref_coef = ref_index_o/ref_index_i;
-        double cos_i = n * wo;
-        double cos_t2 = 1.0 - ref_coef * ref_coef * (1 - cos_i * cos_i);
-        if (cos_t2 < 0) {
-            ps = 1;
-            pt = 0;
-        } else {
-            double cos_t = sqrt(cos_t2);
-            double Rs = ((ref_index_i * cos_i) - (ref_index_o * cos_t))
-                / ((ref_index_i * cos_i) * (ref_index_o * cos_t));
-            double Rp = ((ref_index_o * cos_i) - (ref_index_i * cos_t))
-                / ((ref_index_o * cos_i) * (ref_index_i * cos_t));
-            ps = (Rs * Rs + Rp * Rp)/2;
-            pt = 1 - ps;
-        }
+    struct Fresnel {
+        Vector3 n;
+        Vector3 wo;
+        double ref_coef;
+        double local_ps;
+        double local_pt;
+        double cos_i;
+        double cos_t2;
+    };
 
-        return ref_coef;
+    // etai = n_1, etat = n_2. ref_coef = n_1/n_2.
+    // etat = ref_index_i, etai = ref_index_o.
+    Fresnel fresnel_coefficients(Vector3 n, Vector3 wo, double ref_index_o, double ref_index_i) {
+        double fresnel_ps = ks.p, fresnel_pt = kt.p;
+        if (kt.p > 0) {
+            if ((n * wo) > 0) {
+                n *= -1;
+                std::swap(ref_index_o, ref_index_i);
+            }
+            wo = nor(wo);
+            double ref_coef = ref_index_o/ref_index_i;
+            double cos_i = n * wo;
+            double cos_t2 = 1.0 - ref_coef * ref_coef * (1 - cos_i * cos_i);
+            if (ks.p > 0) {
+                if (cos_t2 < 0) {
+                    fresnel_ps = 1;
+                    fresnel_pt = 0;
+                } else {
+                    double cos_t = sqrt(cos_t2);
+                    double ncos_i = fabsf(cos_i);
+                    double Rs = ((ref_index_i * ncos_i) - (ref_index_o * cos_t))
+                        / ((ref_index_i * ncos_i) + (ref_index_o * cos_t));
+                    double Rp = ((ref_index_o * ncos_i) - (ref_index_i * cos_t))
+                        / ((ref_index_o * ncos_i) + (ref_index_i * cos_t));
+                    fresnel_ps = (Rs * Rs + Rp * Rp)/2.0;
+                    fresnel_pt = 1 - fresnel_ps;
+                }
+                fresnel_ps *= (ks.p + kt.p);
+                fresnel_pt *= (ks.p + kt.p);
+            }
+            return {n, wo, ref_coef, fresnel_ps, fresnel_pt, cos_i, cos_t2};
+        }
+        return {Vector3(), Vector3(), 0, fresnel_ps, fresnel_pt, 0, 0};
     }
 
 public:
-
-    // Lambertian diffuse parameters.
-    RGB kd;   // Lambertian diffuse coefficient.
-    double pd; // Lambertian diffuse probability.
-
-    // Perfect specular reflectance parameters.
-    RGB ks;   // Perfect specular reflectante coefficient.
-    double ps; // Perfect specular reflectance probability.
-
-    // Perfect refrectation parameters.
-    RGB kt;   // Perfect refrectation coefficient.
-    double pt; // Perfect refrectation probability.
-
+    BXDF kd, ks, kt;
     // Material emission.
     RGB ke;
 
     // Material refractance index.
     double ref_index_i;
 
-    Material(RGB kd = RGB(185), RGB ks = RGB(), RGB kt = RGB(), RGB ke = RGB(), double ref_index_i = 0) {
-
+    Material(BXDF kd = BXDF(RGB(185,185,185)), BXDF ks = BXDF(RGB()), BXDF kt = BXDF(RGB()),
+        RGB ke = RGB(), double ref_index_i = 0)
+    {
         // Lambertian diffuse parameters.
         this->kd = kd;
         // Perfect specular reflectance parameters.
@@ -208,46 +320,40 @@ public:
 
     }
 
-    Sample scattering(Vector3 n, Vector3 wo = Vector3(), double ref_index_o = 1) {
+    Sample scattering(Bounds& b, Vector3 n, Vector3 p, Vector3 wo, double ref_index_o = 1) {
 
         // Russian roulette event generator.
         double rr_event = E(e2);
 
         // Fresnel coefficients evaluation:
-        // double ref_coef = fresnel_coefficients(n, wo, ref_index_o, ref_index_i);
+        Fresnel fr = fresnel_coefficients(n, wo, ref_index_o, ref_index_i);
 
         // Lambertian diffuse event:
-        if (pd > 0 && rr_event < pd) {
+        if (kd.p > 0 && rr_event < kd.p) {
             double lat = acos(sqrt(1 - E(e2))); // SE GENERAN COMO RADIANES
             double azi = 2*M_PI*E(e2);          // LO HE COMPROBADO.
             // Orthonormal basis:
-            std::vector<Vector3> b = orthonormal_basis(n);
+            std::vector<Vector3> basis = orthonormal_basis(n);
             // New direction sampling:
-            Vector3 dir = Matrix3BaseChange(b[0],b[1], n, Vector3())
+            Vector3 dir = Matrix3BaseChange(basis[0], basis[1], n, Vector3())
                 * Vector3(sin(lat)*cos(azi), sin(lat)*sin(azi), cos(lat));
-            return Sample(dir, kd/pd, false);
+            return Sample(dir, kd(b,n,p,dir,wo)/kd.p, false);
         }
         // Perfect specular reflectance event:
-        else if (ps > 0 && rr_event < (pd + ps)) {
-            return Sample(wo - ((2*n)*(wo*n)), ks/ps, true);
+        else if (fr.local_ps > 0 && rr_event < (kd.p + fr.local_ps)) {
+            Vector3 dir = wo - ((2*n)*(wo*n));
+            return Sample(dir, ks(b,n,p,dir,wo)/fr.local_ps, true);
         }
         // Perfect refrectation event:
         // - https://graphics.stanford.edu/courses/cs148-10-summer/docs/2006--degreve--reflection_refraction.pdf
         // - https://stackoverflow.com/a/58676386
-        else if (pt > 0 && rr_event < (pd + ps + pt)) {
-
-            double ref_coef = ref_index_o/ref_index_i;
-            if ((n * wo) >  0) {
-                n *= -1;
-                ref_coef = ref_index_i/ref_index_o;
-            }
-            wo = nor(wo);
-            double cos_i  = n * wo;
-            double cos_t2 = 1.0 - ref_coef * ref_coef * (1 - cos_i * cos_i);
-            if (cos_t2 < 0) {
-                return Sample(wo - ((2*n)*(wo*n)), kt/pt, true);
+        else if (fr.local_pt > 0 && rr_event < (kd.p + fr.local_ps + fr.local_pt)) {
+            if (ks.p == 0 && fr.cos_t2 < 0) {
+                Vector3 dir = wo - ((2*n)*(wo*n));
+                return Sample(dir, kt(b,n,p,dir,wo)/fr.local_pt, true);
             } else {
-                return Sample(ref_coef * (wo - n * cos_i) - n * sqrtf(cos_t2), kt/pt, true);
+                Vector3 dir = fr.ref_coef * (fr.wo - fr.n * fr.cos_i) - fr.n * sqrtf(fr.cos_t2);
+                return Sample(dir, kt(b,n,p,dir,wo)/fr.local_pt, true);
             }
         }
         // Ray death event:
@@ -256,15 +362,17 @@ public:
         }
     }
 
+    void print(std::ostream& os, int i) {
+        std::string s = bleeding("  ", i);
+        os << s + "MATERIAL {"
+            << "\n" + s + "  Diffuse: " << kd
+            << "\n" + s + "  Specular: " << ks
+            << "\n" + s + "  Refraction: " << kt << ", coef: " << ref_index_i
+            << "\n" + s + "  Emission: " << ke
+            << "\n" + s + "}\n";
+    }
+
 };
-
-std::ostream& operator<<(std::ostream& os, const Material& m) {
-    return os << "[ kd: " << m.kd << ", ks: " << m.ks << ", kt: " << m.kt << "]";
-}
-
-//=================================================================//
-// Light
-//=================================================================//
 
 //===============================================================//
 // Light photon
@@ -279,11 +387,18 @@ public:
     RGB flux;
     // Photon next direction.
     Vector3 wi;
-    Photon (Vector3 pos, RGB flux, Vector3 wi) : pos(pos), flux(flux), wi(wi) {}
+    Photon() {}
+    Photon(Vector3 pos, RGB flux, Vector3 wi) : pos(pos), flux(flux), wi(wi) {}
 };
 
 std::ostream& operator<<(std::ostream& os, const Photon& p) {
     return os << "Photon { " << p.pos << ", " << p.flux << ", " << p.wi << " }";
+}
+
+void operator>>(std::istream& in, Photon& p) {
+    in >> p.pos;
+    in >> p.flux;
+    in >> p.wi;
 }
 
 struct PhotonAxisPosition {
@@ -311,23 +426,6 @@ public:
 // Objects
 //=================================================================//
 
-class Object;
-
-struct Collision {
-    std::shared_ptr<Object> obj; // Collisioned object.
-    Vector3 normal;              // Collisioned object normal.
-    Vector3 point;               // Collision point.
-    double dist;                 // Collision distance.
-
-    Collision()
-        : normal(Vector3()), point(Vector3()), dist(INFINITY) {}
-    Collision(double d)
-        : normal(Vector3()), point(Vector3()), dist(d) {}
-    Collision(Vector3 n, Vector3 p, double d)
-        : normal(n), point(p), dist(d) {}
-
-};
-
 //--------------------------------
 class Object {
 private:
@@ -338,32 +436,17 @@ private:
 public:
 
     // Object info.
+    Bounds b;   // Data that defines what is inside the Object and what's outside of it
     Material m; // Object material.
-    // Box_collider collider; // Object box collider.
+    Box_collider collider; // Object box collider.
 
-    Object(Material m = Material()) : m(m) {}
+    Object(Bounds b = Bounds(), Material mat = Material()) : b(b), m(mat) {}
 
-    // Texture things.
-    // Texture t; // Object texture.
-    // bool has_texture;
-    //Object() : m(Material(RGB(185), RGB(0), RGB(0))), has_texture(false) {}
-    // Object(Texture t) : t(t), has_texture(true) {}
-    // Object(Material m) : m(m), has_texture(false) {}
-    virtual ~Object() = default; // Por alguna razón, el compilador de C++ necesita un
-                                 // destructor virtual, no hace absolutamente nada, pero
-                                 // no toca los huevos.
-    
-    // Ahora el fr ya no pertenece al objeto sino al material y se calcula a lo
-    // ruleta rusa, entonces, aqui ya no hace nada.
-    virtual RGB emission() const {
-        return m.kd/M_PI;
-    }
+    virtual ~Object() = default;
 
     virtual Collision intersects(const Ray& ray) = 0;
-    
-    friend std::ostream& operator<<(std::ostream& os, Object& p) {
-        return p.print(os);
-    }
+    // Print object properties.
+    virtual void print(std::ostream& os, int i) = 0;
 };
 
 //===============================================================//
@@ -374,32 +457,15 @@ class Plane : public Object {
 private:
     // Print plane attributes.
     std::ostream& print(std::ostream& os) override {
-        return os << "PLANE {"
-            << "\n  normal: "   << n 
-            << "\n  distance: " << D 
-            << "\n  finite plane bounds: " << b
-            << "\n  material: " << m
-            //<< "\n  texture reference: " << t_ref
-            << "\n}";
+        return os;
+            //<< "PLANE {"
+            //<< "\n  normal: "   << n 
+            //<< "\n  distance: " << D 
+            //<< "\n  finite plane bounds: " << b
+            //<< "\n  material: " << m
+            //<< "\n}";
     }
-
-    //// Texture things.
-    //std::vector<Vector3> t_ref; // Texture start reference and orientation.
-    //                            //  - 0: reference point.
-    //                            //  - 1: texture geometrical height;
-    //                            //  - 2: texture geometrical width;
-    ////int qi, qj; // Index of the texture quad that has been intersected.
-    //double qw, qh; // Width and height of a single quad.
-    //double tw, th; // Width and height of the texture.
-    //RGB q_color;  // Color of the texture quad that has been intersected.
-
 public:
-    // Geometrical things
-    double D;                 // Implicit equation A*x+B*y+C*z+D
-                             //     (= 0 if the point is in the plane).
-    Vector3 n;               // Normal of the plane = (A,B,C).
-    std::vector<Vector3> b;  // Vertex bounds of the plane (if finite).
-
     // Default constructor.
     Plane() {}
 
@@ -408,36 +474,13 @@ public:
     // ==========================
 
     // Solid color plane defined by a normal and its distance to the origin.
-    Plane(double D, Vector3 n, Material m = Material()) : Object(m), D(D), n(nor(n)) {}
+    Plane(double D, Vector3 n, Material mat = Material()) : Object(Bounds(nor(n),D), mat) {}
 
     // Plane defined by a normal and a plane contained point with solid color.
-    Plane(Vector3 p, Vector3 n, Material m = Material()) : Object(m) {
-        this->n = nor(n);
-        this->D = -(this->n)*p;
+    Plane(Vector3 p, Vector3 n, Material mat = Material()) : Object(Bounds(), mat) {
+        b.normal = nor(n);
+        b.D = -b.normal*p;
     }
-
-    // Texturized plane defined by a normal and the distance of the plane to the origin.
-    //  - t is the texture.
-    //  - p is the point reference where the texture will start to be drawn.
-    //  - tw and th are the texture geometrical width and height.
-    //  - r is the rotation of the texture.
-    //  - o is the orientation (positive or negative).
-    /*
-    Plane(double D, Vector3 n, Texture t, Texture_ref r, double tw, double th)
-        : Object(t), tw(tw), th(th), D(D)
-    {
-
-        // Plane things.
-        this->n = nor(n);
-
-        // Texture reference.
-        t_ref.push_back((r.point_ref) ? r.p : -D*this->n);
-        t_ref.push_back(nor(rot(this->n, r.r_flags, r.r_vals), th));
-        t_ref.push_back(nor(crs(t_ref[1], this->n), tw));
-        qw = tw/t.width;
-        qh = th/t.height;
-    }
-    */
 
     // ==========================
     // Finite plane constructors
@@ -445,70 +488,125 @@ public:
     //Plane(double D, std::vector<Vector3> b, Material m = Material())
     //    : Object(m), D(D), n(nor(crs(b[1]-b[0], b[3]-b[0]))), b(b) {}
 
-    Plane(std::vector<Vector3> b, Material m = Material()) : Object(m), b(b) {
-        this->n = nor(crs(b[1]-b[0], b[3]-b[0]));
-        this->D = -n*b[0];
+    Plane(std::vector<Vector3> pos, std::vector<Vector3> norm = {}, std::vector<VectorUV> uv = {}, Material mat = Material()) : Object(Bounds(), mat) {
+        b.vP = pos;
+        b.vN = norm;
+        b.vUV = uv;
+        b.normal = nor(crs(pos[1]-pos[0], pos[2]-pos[0]));
+        b.D = -b.normal*pos[0];
     }
 
-    /*
-    Plane(std::vector<Vector3> b, Texture t, Texture_ref r) : Object(t), b(b) {
-        // Geometrical things.
-        n = nor(crs(b[1]-b[0], b[3]-b[0]));
-        D = -n*b[0];
-
-        // Texture reference.
-        tw = (b[3]-b[0]).mod();
-        th = (b[1]-b[0]).mod();
-        t_ref.push_back((r.point_ref) ? r.p : -D*n);
-        t_ref.push_back(nor(rot(n, r.r_flags, r.r_vals), th));
-        t_ref.push_back(nor(crs(t_ref[1], n), tw));
-        qw = tw/t.width;
-        qh = th/t.height;
-    }
-    */
-
+    // B +----+ C
+    //   |  / |
+    //   | /  |
+    // A +----+ D
     Collision intersects(const Ray& r) override {
 
-        if (n*r.d == 0.f) return {};     // Si la division es 0 no hay corte.
-        double t = -(n*r.p + D)/(n*r.d); // Calcula la distancia desde el
-                                         //   centro del rayo hasta el punto de corte.
-        
-        Vector3 x = (r.p + r.d*t);
-        if (b.size()) {
-            if( n * crs(b[1]-b[0], x-b[0]) < 0 || // Point p inside edge 1 (v1 to v2).
-                n * crs(b[2]-b[1], x-b[1]) < 0 || // Point p inside edge 2 (v2 to v3).
-                n * crs(b[3]-b[2], x-b[2]) < 0 || // Point p inside edge 3 (v3 to v4).
-                n * crs(b[0]-b[3], x-b[3]) < 0)   // Point p inside edge 4 (v4 to v1).
-            {
+        // Si la division es 0 no hay corte.
+        auto retN = (b.normal * r.d < 0) ? b.normal : -b.normal;
+        auto fix = r.p + (b.normal * 0.00001);
+        if (std::abs(b.normal*r.d) < 0) return Collision(-1);
+
+        // Calcula la distancia desde el centro del rayo hasta el punto de corte.
+        double t = -(b.normal*fix + b.D)/(b.normal*r.d);                                
+        if (t < 0) return Collision(-1);
+
+        Vector3 x = (r.d * t + fix);
+
+        // Extra check for all edges if bounded
+        for (uint32_t i = 0; i < b.vP.size(); i++) {
+            if (retN * crs(b.vP[(i+1) % b.vP.size()] - b.vP[i], x - b.vP[i]) < 0) {
                 return Collision(-1);
             }
         }
 
-        // Texture things.
         /*
-        if (has_texture) {
-            p -= t_ref[0];
-            // Obtaining proportional width and height.
-            double hs = t_ref[1] * (p/th);
-            double ws = t_ref[2] * (p/tw);
+        if (b.vP.size() == b.vN.size()) {
+                // Calculate centroid of the polygon
+                Vector3 C = Vector3();
+                for (auto v : b.vP) C += v;
+                C = C / b.vP.size();
 
-            // Obtaining correspondent texture indexes.
-            int qi = std::abs(std::fmod(hs, th)/ qh);
-            int qj = std::abs(std::fmod(ws, tw)/ qw);
+                Vector3 CtoX = x - C;
 
-            // If the proportional distance is negative, we have to
-            // flip the index to avoid fliped texture tiles.
-            if (hs < 0) qi = (t.height - 1) - qi;
-            if (ws < 0) qj = (t.width  - 1) - qj;
+                for (uint32_t i = 0; i < b.vP.size(); i++) {
+                    Vector3 CtoV = b.vP[i] - C;
+                    double dist = CtoX * CtoV;
+                    dist = (dist > 0) ? dist : 0;
 
-            // If the texture quad is transparent, it "doesn't intersects".
-            if (t.quads[qi][qj].alpha) return {};
+                    retN += b.vN[i] * 2 * dist / b.vP.size();
+                }
+                retN = nor(retN);
+        }
+        */
 
-            q_color = t.quads[qi][qj].color;
-        }*/
 
-        // Devolver la distancia al punto de corte.
-        return Collision(nor((n * r.d <= 0) ? n : -n), x, t);
+        // Devolver la normal correcta junto con la distancia al punto de corte.
+        return Collision(retN, x, t);
+    }
+
+    // Print plane properties.
+    void print(std::ostream& os, int i) override {
+        std::string s = bleeding("  ", i);
+        os << s + "PLANE {"
+            << "\n" + s + "  normal: " << b.normal 
+            << "\n" + s + "  distance: " << b.D
+            << "\n" + s + "  finite plane bounds {";
+        if (b.vP.size()) {
+            for (auto& v : b.vP) {
+                os << " " << v;
+            }
+            os << " }\n";
+        } else {
+            os << "}\n";
+        }
+        m.print(os, i+1);
+        os << s + "}\n";
+    }
+
+};
+
+//===============================================================//
+// Triangle
+//===============================================================//
+class Triangle : public Plane {
+private:
+    // Print plane attributes.
+    std::ostream& print(std::ostream& os) override {
+        return os;
+            //<< "PLANE {"
+            //<< "\n  normal: "   << n 
+            //<< "\n  distance: " << D 
+            //<< "\n  finite plane bounds: " << b
+            //<< "\n  material: " << m
+            //<< "\n}";
+    }
+public:
+    Triangle() {}
+    Triangle(std::vector<Vector3> pos, std::vector<Vector3> norm = {}, std::vector<VectorUV> uv = {}, Material mat = Material()) : Plane(pos, norm, uv, mat) {}
+
+    Collision intersects(const Ray& r) override {
+        // Plane::intersects performs an n-edge check also valid for Triangle implementation
+        return Plane::intersects(r);
+    }
+
+    // Print triangle properties.
+    void print(std::ostream& os, int i) override {
+        std::string s = bleeding("  ", i);
+        os << s + "TRIANGLE {"
+            << "\n" + s + "  normal: " << b.normal
+            << "\n" + s + "  triangle bounds {";
+        if (b.vP.size()) {
+            for (auto& v : b.vP) {
+                os << "\n" + s + "    " << v;
+            }
+            os << "\n" + s + "  }\n";
+        }
+        else {
+            os << "}\n";
+        }
+        m.print(os, i+1);
+        os << s + "}\n";
     }
 
 };
@@ -519,43 +617,50 @@ public:
 
 class Sphere : public Object {
 private:
-
+    // Print plane attributes.
     std::ostream& print(std::ostream& os) override {
-        return os << "SPHERE {"
-            << "\n  center: "   << center
-            << "\n  radius: "   << radius
-            << "\n  material: " << m
-            << "\n}";
+        return os;
+            //<< "PLANE {"
+            //<< "\n  normal: "   << n 
+            //<< "\n  distance: " << D 
+            //<< "\n  finite plane bounds: " << b
+            //<< "\n  material: " << m
+            //<< "\n}";
     }
-
 public:
-
-    Vector3 center; // Sphere center.
-    double radius;  // Sphere radius.
-
-    Sphere(Vector3 center, double radius, Material m = Material()) 
-        : Object(m), center(center), radius(radius) {}
+    Sphere(Vector3 center, Vector3 axis, Material mat = Material()) : Object(Bounds(center, axis), mat) {}
 
     Collision intersects(const Ray& r) override {
 
-        Vector3 L = r.p - center;
-        double a = r.d * r.d;
-        double b = 2 * r.d * L;
-        double c = L * L - radius * radius;
-        double delta = b*b - 4*a*c;
+        Vector3 L = r.p - b.c;
+        double A = r.d * r.d;
+        double B = 2 * r.d * L;
+        double C = L * L - b.r * b.r;
+        double delta = B*B - 4*A*C;
 
         if (delta < EPSILON_ERROR) return Collision(-1);
-        double t0 = (-b - sqrt(delta)) / (2*a);
-        double t1 = (-b + sqrt(delta)) / (2*a);
+        double t0 = (-B - sqrt(delta)) / (2*A);
+        double t1 = (-B + sqrt(delta)) / (2*A);
         if (t0 <= EPSILON_ERROR && t1 <= EPSILON_ERROR) return Collision(-1);
+
         if (t0 > EPSILON_ERROR) {
             Vector3 x = r.d * t0 + r.p;
-            return Collision(nor(x-center), x, t0);
+            return Collision(nor(x-b.c), x, t0);
         } else {
             Vector3 x = r.d * t1 + r.p;
-            return Collision(nor(x-center), x, t1);
+            return Collision(nor(x-b.c), x, t1);
         }
+    }
 
+    // Print sphere properties.
+    void print(std::ostream& os, int i) override {
+        std::string s = bleeding("  ", i);
+        os << s + "SPHERE {"
+            << "\n" + s + "  center: " << b.c
+            << "\n" + s + "  axis: " << b.normal
+            << "\n" + s + "  radius: " << b.r << "\n";
+        m.print(os, i+1);
+        os << s + "}\n";
     }
 
 };
@@ -566,14 +671,19 @@ public:
 
 class Cube : public Object {
 private:
+    // Print plane attributes.
     std::ostream& print(std::ostream& os) override {
-        return os << "CUBE {"
-            //<< "\n  bounds: "   << bounds
-            << "\n  material: " << m
-            << "\n}";
+        return os;
+            //<< "PLANE {"
+            //<< "\n  normal: "   << n 
+            //<< "\n  distance: " << D 
+            //<< "\n  finite plane bounds: " << b
+            //<< "\n  material: " << m
+            //<< "\n}";
     }
 public:
-    // Cube vertex representation:
+    
+    // Cube bounds representation:
     //        b[5]             max (b[6])
     //            +-----------+
     //           /.          /|
@@ -583,61 +693,111 @@ public:
     //          |.          |/
     //          +-----------+
     //     min (b[0])         b[3]
-    std::vector<Vector3> v;   // Cube vertex.
     std::vector<Plane> faces; // Cube faces.
 
     // Default constructor.
     Cube() {}
     // Cube constructor with the minimum and maximum bounds.
-    Cube(Vector3 min, Vector3 max, Material m = Material()) : Object(m) {
+    Cube(Vector3 min, Vector3 max, Material mat = Material()) : Object(Bounds(), mat) {
 
         // Vertex order:
-        v.push_back(min);                          // v[0]: -x, -y, -z.
-        v.push_back(Vector3(min.x, max.y, min.z)); // v[1]: -x, +y, -z.
-        v.push_back(Vector3(max.x, max.y, min.z)); // v[2]: +x, +y, -z.
-        v.push_back(Vector3(max.x, min.y, min.z)); // v[3]: +x, -y, -z.
-        v.push_back(Vector3(min.x, min.y, max.z)); // v[4]: -x, -y, +z.
-        v.push_back(Vector3(min.x, max.y, max.z)); // v[5]: -x, +y, +z.
-        v.push_back(max);                          // v[6]: +x, +y, +z.
-        v.push_back(Vector3(max.x, min.y, max.z)); // v[7]: +x, -y, +z.
+        b.vP.push_back(min);                          // b[0]: -x, -y, -z.
+        b.vP.push_back(Vector3(min.x, max.y, min.z)); // b[1]: -x, +y, -z.
+        b.vP.push_back(Vector3(max.x, max.y, min.z)); // b[2]: +x, +y, -z.
+        b.vP.push_back(Vector3(max.x, min.y, min.z)); // b[3]: +x, -y, -z.
+        b.vP.push_back(Vector3(min.x, min.y, max.z)); // b[4]: -x, -y, +z.
+        b.vP.push_back(Vector3(min.x, max.y, max.z)); // b[5]: -x, +y, +z.
+        b.vP.push_back(max);                          // b[6]: +x, +y, +z.
+        b.vP.push_back(Vector3(max.x, min.y, max.z)); // b[7]: +x, -y, +z.
 
         // Faces order:
-        faces.push_back(Plane({v[0],v[1],v[2],v[3]})); // Front face.
-        faces.push_back(Plane({v[3],v[2],v[6],v[7]})); // Right face.
-        faces.push_back(Plane({v[7],v[6],v[5],v[4]})); // Back face.
-        faces.push_back(Plane({v[4],v[5],v[1],v[0]})); // Left face.
-        faces.push_back(Plane({v[1],v[5],v[6],v[2]})); // Top face.
-        faces.push_back(Plane({v[0],v[4],v[7],v[4]})); // Bottom face.
+        faces.push_back(Plane({b.vP[0],b.vP[1],b.vP[2],b.vP[3]}, {}, {}, m)); // Front face.
+        faces.push_back(Plane({b.vP[3],b.vP[2],b.vP[6],b.vP[7]}, {}, {}, m)); // Right face.
+        faces.push_back(Plane({b.vP[7],b.vP[6],b.vP[5],b.vP[4]}, {}, {}, m)); // Back face.
+        faces.push_back(Plane({b.vP[4],b.vP[5],b.vP[1],b.vP[0]}, {}, {}, m)); // Left face.
+        faces.push_back(Plane({b.vP[1],b.vP[5],b.vP[6],b.vP[2]}, {}, {}, m)); // Top face.
+        faces.push_back(Plane({b.vP[0],b.vP[3],b.vP[7],b.vP[4]}, {}, {}, m)); // Bottom face.
 
     }
     // Cube constructor with each vertice.
-    Cube(std::vector<Vector3> v, Material m = Material()) : Object(m) {
+    Cube(std::vector<Vector3> pos, Material mat = Material()) : Object(Bounds(pos), mat) {
 
-        // Cube vertices:
-        this->v = v;
+        // Note: Cube vertices initialized in constructor
+
         // Cube faces:
-        faces.push_back(Plane({v[0],v[1],v[2],v[3]})); // Front face.
-        faces.push_back(Plane({v[3],v[2],v[6],v[7]})); // Right face.
-        faces.push_back(Plane({v[7],v[6],v[5],v[4]})); // Back face.
-        faces.push_back(Plane({v[4],v[5],v[1],v[0]})); // Left face.
-        faces.push_back(Plane({v[1],v[5],v[6],v[2]})); // Top face.
-        faces.push_back(Plane({v[0],v[4],v[7],v[4]})); // Bottom face.
+        faces.push_back(Plane({b.vP[0],b.vP[1],b.vP[2],b.vP[3]}, {}, {}, m)); // Front face.
+        faces.push_back(Plane({b.vP[3],b.vP[2],b.vP[6],b.vP[7]}, {}, {}, m)); // Right face.
+        faces.push_back(Plane({b.vP[7],b.vP[6],b.vP[5],b.vP[4]}, {}, {}, m)); // Back face.
+        faces.push_back(Plane({b.vP[4],b.vP[5],b.vP[1],b.vP[0]}, {}, {}, m)); // Left face.
+        faces.push_back(Plane({b.vP[1],b.vP[5],b.vP[6],b.vP[2]}, {}, {}, m)); // Top face.
+        faces.push_back(Plane({b.vP[0],b.vP[3],b.vP[7],b.vP[4]}, {}, {}, m)); // Bottom face.
 
     }
     // Cube constructor with each plane.
-    Cube(std::vector<Plane> faces, Material m = Material())
-        : Object(m), faces(faces) {}
+    Cube(std::vector<Plane> faces, Material mat = Material()) : Object(Bounds(), mat), faces(faces) {
 
-    Collision intersects(const Ray& ray) override {
+        // Change the faces' materials to that of our cube
+        for (auto& f : faces) f.m = m;
+
+        // We might still want the vertices of our cube, so we will also extract them
+        debug(faces.size() != 6, "This is not a cube, what is this?");
+
+        // Following our cube bounds representation:
+        // Front face
+        b.vP.push_back(faces[0].b.vP[0]);
+        b.vP.push_back(faces[0].b.vP[1]);
+        b.vP.push_back(faces[0].b.vP[2]);
+        b.vP.push_back(faces[0].b.vP[3]);
+        
+        // Back face
+        b.vP.push_back(faces[2].b.vP[3]);
+        b.vP.push_back(faces[2].b.vP[2]);
+        b.vP.push_back(faces[2].b.vP[1]);
+        b.vP.push_back(faces[2].b.vP[0]);
+    }
+
+    Collision intersects(const Ray& r) override {
 
         Collision c;
-        for (auto& f : faces) {
-            auto t = f.intersects(ray);
+        for (auto& face : faces) {
+            auto t = face.intersects(r);
             if (t.dist > 0 && t.dist < c.dist) {
                 c = t;
+                c.obj = std::make_shared<Plane>(face);
             }
         }
-        return (c.dist != INFINITY) ? c : Collision(-1);
+        if (c.dist > 0 && c.dist != INFINITY) {
+            //c.normal = -c.normal;
+            return c;
+        } else {
+            return Collision(-1);
+        }
+    }
+
+    // Print cube properties.
+    void print(std::ostream& os, int i) override {
+        std::string s = bleeding("  ", i);
+        // os << s + "CUBE {"
+        //     << "\n" + s + "  cube bounds {";
+        // if (b.size()) {
+        //     for (auto& v : b) {
+        //         os << "\n" + s + "    " << v;
+        //     }
+        //     os << "\n" + s + "  }";
+        // } else {
+        //     os << "}";
+        // }
+        os << "\n" + s + "  faces {\n"; 
+        if(faces.size()){
+           for (auto& f : faces) {
+               f.print(os, i+2);
+           }
+           os << s + "  }\n";
+        } else {
+           os << s + "}\n";
+        }
+        m.print(os, i+1);
+        os << s + "}\n";
     }
 
 };
@@ -646,103 +806,99 @@ public:
 // Meshes and its faces: triangles.
 //===============================================================//
 
-class Triangle : public Plane {
-private:
-    std::ostream& print(std::ostream& os) override {
-        return os << "TRIANGLE {" 
-            << "\n vertex: "   << v 
-            << "\n material: " << m
-            << "\n}";
-    }
-public:
-    std::vector<Vector3> v; // Triangle vertex.
-
-    Triangle() {}
-    Triangle(std::vector<Vector3> v, Material m = Material()) 
-        : Plane(v[0], crs(v[1]-v[0], v[2]-v[0]), m), v(v) {}
-
-    Collision intersects(const Ray& r) override {
-
-        Collision c;
-        if ((c = Plane::intersects(r)).dist < 0) return c;
-
-        Vector3 x = r.d*c.dist + r.p;
-        if (n * crs(v[1]-v[0], x-v[0]) < 0 || // Point p inside edge 1 (v1 to v2).
-            n * crs(v[2]-v[1], x-v[1]) < 0 || // Point p inside edge 2 (v2 to v3).
-            n * crs(v[0]-v[2], x-v[2]) < 0)   // Point p inside edge 3 (v3 to v1).
-        {
-            return Collision(-1);
-        }
-        return Collision(nor(n), x, c.dist);
-    }
-
-};
-
 class Mesh : public Object {
 private:
+    // Ply metadata: nothing for the moment.
+    struct Ply_Vertex {
+        Vector3 pos;
+        Vector3 n;
+        VectorUV uv;
+    };
 
+    // Print plane attributes.
     std::ostream& print(std::ostream& os) override {
-        return os << "MESH {"
-            << "\n  faces: "        << faces
-            << "\n  material: "     << m
-            //<< "\n  box collider: " << c
-            << "\n}";
+        return os;
+            //<< "PLANE {"
+            //<< "\n  normal: "   << n 
+            //<< "\n  distance: " << D 
+            //<< "\n  finite plane bounds: " << b
+            //<< "\n  material: " << m
+            //<< "\n}";
     }
-
-    // Ply metadata
-    // nothing for the moment.
-
 public:
 
-    Box_collider collider;       // Mesh box collider.
     std::vector<Triangle> faces; // Mesh faces.
 
-    Mesh(std::vector<Triangle> faces, Material m = Material()) 
-        : Object(m), faces(faces)
+    Mesh(std::vector<Triangle> faces, Material mat = Material()) : Object(Bounds(), mat), faces(faces)
     {   
         for (auto& f : faces) {
-            for (auto& v : f.v) {
+            f.m = m;
+            for (auto& v : f.b.vP) {
                 collider.b[0] = min(collider.b[0], v);
                 collider.b[1] = max(collider.b[1], v);
             }
         }
     }
 
-    Mesh(std::string ply_file, Material m = Material()) : Object(m) {
+    Mesh(std::string ply_file, Material mat = Material()) : Object(Bounds(), mat) {
+
+        bool read_n = false, read_uv = false;
 
         // Reading the PLY file:
         std::string s("");
         std::ifstream in(ply_file);
-        assert(in.is_open() && "file not found, check it out.");
-        std::vector<Vector3> vertex;
+        debug(!in.is_open(), "file '" + ply_file + "' not found, check it out!");
+
+        std::vector<Ply_Vertex> vertex;
         // Reading the PLY header:
         while (s.compare("end_header")) {
             s = get_line(in);
             if (s.find("element vertex") != std::string::npos) {
-                vertex = std::vector<Vector3>(
+                vertex = std::vector<Ply_Vertex>(
                     std::stoi(replace(s, int_d))
                 );
-            } else if (s.find("element face") != std::string::npos) {
+            }
+            else if (s.find("property float nx") != std::string::npos) read_n = true;
+            else if (s.find("property float s") != std::string::npos) read_uv = true;
+            else if (s.find("element face") != std::string::npos) {
                 faces  = std::vector<Triangle>(
                     std::stoi(replace(s, int_d))
                 );
             }
         }
-        assert(vertex.size() && faces.size() && "no vertex..? no faces..?"); // no bitches..? Sorry
+        debug(vertex.empty() && faces.empty(), "no vertex..? no faces..?"); // no bitches..? Sorry
 
         // Reading the PLY vertex list:
         for (auto& v : vertex) {
-            in >> v;
+            in >> v.pos;
+            if (read_n) in >> v.n;
+            if (read_uv) in >> v.uv;
             // Defining the mesh collider.
-            collider.b[0] = min(collider.b[0], v);
-            collider.b[1] = max(collider.b[1], v);
+            collider.b[0] = min(collider.b[0], v.pos);
+            collider.b[1] = max(collider.b[1], v.pos);
         }
 
         // Reading the PLY faces list.
         int n, v1, v2, v3;
         for (auto& f : faces) {
             in >> n >> v1 >> v2 >> v3;
-            f = Triangle({vertex[v1], vertex[v2], vertex[v3]});
+
+            std::vector<Vector3> pos, n;
+            std::vector<VectorUV> uv;
+
+            pos = {vertex[v1].pos, vertex[v2].pos, vertex[v3].pos};
+            if (read_n) n = {vertex[v1].n, vertex[v2].n, vertex[v3].n};
+            if (read_uv) uv = {vertex[v1].uv, vertex[v2].uv, vertex[v3].uv};
+
+            f = Triangle(pos, n, uv, m);
+
+            // check normal
+            //if (f.b.normal * ((f.b.vP[0]+f.b.vP[1]+f.b.vP[2])/3 - collider.center) > EPSILON_ERROR) {
+            //    pos = {vertex[v1].pos, vertex[v3].pos, vertex[v2].pos};
+            //    if (read_n) n = {vertex[v1].n, vertex[v3].n, vertex[v2].n};
+            //    if (read_uv) uv = {vertex[v1].uv, vertex[v3].uv, vertex[v2].uv};
+            //    f = Triangle(pos, n, uv, m);
+            //}
         }
     }
 
@@ -752,31 +908,52 @@ public:
         if (!collider.intersects(r)) return Collision(-1);
 
         // Mesh internal collision.
-        Collision c; 
+        Collision c;
         // Calculating possible intersections with the mesh faces:
         for (auto& f : faces) {
             auto t = f.intersects(r);
             if (t.dist > 0 && t.dist < c.dist) {
                 c = t;
+                c.obj = std::make_shared<Triangle>(f);
             }
         }
         return (c.dist != INFINITY) ? c : Collision(-1);
     }
 
+    // Print mesh properties.
+    void print(std::ostream& os, int i) override {
+        std::string s = bleeding("  ", i);
+        os << s + "MESH {\n";
+        collider.print(os, i+1);
+        os << s + "  FACES {\n"; 
+        if(faces.size()){
+            for (auto& f : faces) {
+                f.print(os, i+2);
+            }
+            os << s + "  }\n";
+        } else {
+            os << s + "}\n";
+        }
+        m.print(os, i+1);
+        os << s + "}\n";
+    }
+
 };
 
-Mesh operator*(Mesh m, Matrix3 transform) {
+Mesh operator*(Mesh mesh, Matrix3 transform) {
 
-    m.collider = Box_collider();
-    for (auto& f : m.faces) {
-        for (auto& v : f.v) {
+    mesh.collider = Box_collider();
+    for (auto& f : mesh.faces) {
+        for (auto& v : f.b.vP) {
             v.h = 1;
             v = transform * v;
-            m.collider.b[0] = min(m.collider.b[0], v);
-            m.collider.b[1] = max(m.collider.b[1], v);
+            mesh.collider.b[0] = min(mesh.collider.b[0], v);
+            mesh.collider.b[1] = max(mesh.collider.b[1], v);
         }
-        f = Triangle(f.v, f.m);
+        f = Triangle(f.b.vP, f.b.vN, f.b.vUV, f.m);
     }
-    return m;
+    return mesh;
 
 };
+
+#endif

@@ -1,0 +1,797 @@
+#pragma once
+#ifndef GEOMETRY_H
+#define GEOMETRY_H
+
+#include <cmath>
+#include <iostream>
+
+#ifndef M_PI
+    #define M_PI 3.14159265358979323846
+#endif
+#define EPSILON_ERROR 0.000001
+
+enum Rotation { X_ROT = 0x1, Y_ROT = 0x2, Z_ROT = 0x4 };
+/*
+template <std::size_t N>
+class Vector {
+private:
+    // Para limpiar números feos que se generen por redondeo o por 
+    // operaciones matemáticas. Me da muchisimo toc ver un 0 negativo
+    // o un número elevado a la -12.
+    void clean() {
+        for (auto& c : coords) {
+            if (std::abs(c) < EPSILON_ERROR || c == -0) c = 0;
+        }
+        for (std::size_t i = 0; i < N; i++) {
+            if (i == 0) {
+                x = coords[i];
+            } else if (i == 1) {
+                y = coords[i];
+            } else if (i == 2) {
+                z = coords[i];
+            }
+        }
+    }
+public:
+    // Porque? Me apetece.
+    double x;
+    double y;
+    double z;
+
+    // Vector coordinates: N-dimensional vector.
+    std::vector<double> coords;
+    // Homogeneous coordinate g. Used for matrix transformators.
+    double h;
+
+    Vector() : coords(std::vector<double>(N,0)) {}
+    
+    template <typename... Args>
+    Vector(Args&&... args) {
+
+        static_assert(sizeof...(args) == N || sizeof...(args) == N+1, "different coordinates length...");
+        coords  = { std::forward<Args>(args)... };
+        clean();
+
+        if (sizeof...(args) == N) this->h = 0;
+        else {
+            this->h = coords.back();
+            coords.pop_back();
+        }
+
+    }
+
+    Vector(Vector<N> v, int h) {
+        for (std::size_t i = 0; i < N; i++) {
+            coords[i] = v[i];
+        }
+        this->h = h;
+        clean();
+    }
+
+    Vector(double m[N+1]) {
+        for (std::size_t i = 0; i < N; i++) {
+            coords[i] = m[i];
+        }
+        this->h = m[N];
+        clean();
+    }
+
+
+    // Vector module
+    double mod() const {
+        double discriminant = 0;
+        for (auto& c : coords) {
+            discriminant += (c*c);
+        }
+        return std::sqrt(discriminant);
+    }
+
+    // Vector to string.
+    std::string to_string() {
+        std::string to_string = "(";
+        for (auto& c : coords) {
+            to_string += " " + std::to_string(c);
+        }
+        return to_string + " )";
+    }
+
+    // Vector asignation.
+    void operator=(Vector<N> v) {
+        for (std::size_t i = 0; i < N; i++) {
+            coords[i] = v[i];
+            if (std::abs(coords[i]) < EPSILON_ERROR || coords[i] == -0) coords[i] = 0;
+        }
+    }
+
+    // Vector addition.
+    void operator+=(Vector<N> v) {
+        for (std::size_t i = 0; i < N; i++) {
+            coords[i] += v[i];
+        }
+    }
+
+    // Vector substraction.
+    void operator-=(Vector<N> v) {
+        for (std::size_t i = 0; i < N; i++) {
+            coords[i] -= v[i];
+        }
+    }
+
+    // Vector scalar product.
+    void operator*=(double d) {
+        for (std::size_t i = 0; i < N; i++) {
+            coords[i] *= d;
+        }
+    }
+
+    // Vector scalar division.
+    void operator/=(double d) {
+        for (std::size_t i = 0; i < N; i++) {
+            coords[i] /= d;
+        }
+    }
+
+    // Vector access.
+    const double& operator[](size_t i) const {
+        return coords[i];
+    }
+
+    double& operator[](size_t i) {
+        return coords[i];
+    }
+};
+
+// Vectors addition.
+template <size_t N>
+Vector<N> operator+(Vector<N> v, Vector<N> w) {
+    v += w;
+    return v;
+}
+
+// Vectors substraction.
+template <size_t N>
+Vector<N> operator-(Vector<N> v, Vector<N> w) {
+    v -= w;
+    return v;
+}
+
+// Vector sign change.
+template <size_t N>
+Vector<N> operator-(Vector<N> v) {
+    v *= -1;
+    return v;
+}
+
+// Vectors dot product
+template <size_t N>
+double operator*(Vector<N> v, Vector<N> w) {
+    double scalar = v.h * w.h;
+    for (std::size_t i = 0; i < N; i++) {
+        scalar += v[i] * w[i];
+    }
+    return scalar;
+}
+
+// Vector scalar product
+template <size_t N>
+Vector<N> operator*(Vector<N> v, double d) {
+    v *= d;
+    return v;
+}
+
+// Vector scalar product
+template <size_t N>
+Vector<N> operator*(double d, Vector<N> v) {
+    return v*d;
+}
+
+// Vector scalar division
+template <size_t N>
+Vector<N> operator/(Vector<N> v, double d) {
+    v /= d;
+    return v;
+}
+
+// Vector division (be careful, this doesn't make sense).
+template <size_t N>
+Vector<N> operator/(Vector<N> v, Vector<N> w) {
+    for (std::size_t i = 0; i < N; i++) {
+        v[i] /= w[i];
+    }
+    return v;
+}
+
+// Vectors equality.
+template <size_t N>
+bool operator==(Vector<N> v, Vector<N> w) {
+    for (std::size_t i = 0; i < N; i++) {
+        if (std::abs(v[i] - w[i]) > EPSILON_ERROR) return false;
+    }
+    return true;
+}
+
+// Vectors inequality.
+template <size_t N>
+bool operator!=(Vector<N> v, Vector<N> w) {
+    return !(v == w);
+}
+
+// Vector absolute.
+template <size_t N>
+inline Vector<N> abs(Vector<N> v) {
+    for (std::size_t i = 0; i < N; i++) {
+        v[i] = std::abs(v[i]);
+    }
+    return v;
+}
+
+// Angle between two vectors in radians.
+template <size_t N>
+double rad(Vector<N> v, Vector<N> w) {
+    return std::acos((v * w)/(v.mod() * w.mod()));
+}
+
+// Angle between two vectors in degrees.
+template <size_t N>
+double deg(Vector<N> v, Vector<N> w) {
+    return rad(v, w) * (180/M_PI);
+}
+
+// Vector normalization. By default, it normalize to the unitary value.
+template <size_t N>
+Vector<N> nor(Vector<N> v, double mod = 1.0) {
+    return v * (mod/v.mod());
+}
+
+
+// Min values between two vectors.
+template <size_t N>
+Vector<N> min(Vector<N> v, Vector<N> w) {
+    for (std::size_t i = 0; i < N; i++) {
+        v[i] = std::min(v[i], w[i]);
+    }
+    return v;
+}
+
+// Max values between two vectors.
+template <size_t N>
+Vector<N> max(Vector<N> v, Vector<N> w) {
+    for (std::size_t i = 0; i < N; i++) {
+        v[i] = std::max(v[i], w[i]);
+    }
+    return v;
+}
+
+// How to rotate a vector in reference to other vector. Rotating a respect of b.
+// https://math.stackexchange.com/questions/511370/how-to-rotate-one-vector-about-another
+template <size_t N>
+Vector<N> rot(Vector<N> v, Vector<N> w, double r = M_PI/2) {
+
+    Vector<N> vww = ((v*w)/(w*w))*w; // v component in the direction of w.
+    Vector<N> vwp = v - vww;         // v component in the orthogonal direction to w.
+    Vector<N> x   = crs(w, vwp);     // x component, orthogonal to v and w.
+
+    double vwp_m = vwp.mod();
+    double p1 = std::cos(r)/vwp_m;
+    double p2 = std::sin(r)/vwp_m;
+    return (vwp_m * (p1*vwp + p2*x)) + vww;
+}
+
+// Vector out.
+template <size_t N>
+std::ostream& operator<<(std::ostream& os, const Vector<N>& v) {
+    os << "(";
+    for (auto& c : v.coords) {
+        os << c << ",";
+    }
+    return os << v.h << ")";
+}
+
+// Vector in.
+template <size_t N>
+void operator>>(std::istream& in, Vector<N>& v) {
+    for (auto& c : v.coords) {
+        in >> c;
+    }
+}
+
+using Vector2 = Vector<2>;
+using Vector3 = Vector<3>;
+Vector3 crs(Vector3 v, Vector3 w) {
+    return Vector3(
+        (v[1] * w[2]) - (v[2] * w[1]),
+        (v[2] * w[0]) - (v[0] * w[2]),
+        (v[0] * w[1]) - (v[1] * w[0])
+    );
+}
+
+// Orthonormal basis
+// https://graphics.pixar.com/library/OrthonormalB/paper.pdf
+
+std::vector<Vector<3>> orthonormal_basis(const Vector3& n) {
+
+    double sign = copysignf(1.0, n.z);
+    const double a = -1.0 / (sign + n.z);
+    const double b = n.x * n.y * a;
+    return {
+        Vector3(1.0 + sign * n.x * n.x * a, sign * b, -sign * n.x),
+        Vector3(b, sign + n.y * n.y *a, -n.y)
+    };
+
+}*/
+
+
+//===============================================================//
+// Vector3: 3d vector
+//===============================================================//
+/**
+ * @brief Three dimension vector. Four components:
+ *  - Coordinate x.
+ *  - Coordinate y.
+ *  - Coordinate z.
+ *  - Homogeneous coordinate h. Used for matrix transformators:
+ *      - 0 if Direction.
+ *      - 1 if Point.
+ */
+class Vector3 {
+private:
+
+    // Para limpiar números feos que se generen por redondeo o por 
+    // operaciones matemáticas. Me da muchisimo toc ver un 0 negativo
+    // o un número elevado a la -12.
+    void clean() {
+        if (std::abs(x) < EPSILON_ERROR || x == -0) x = 0;
+        if (std::abs(y) < EPSILON_ERROR || y == -0) y = 0;
+        if (std::abs(z) < EPSILON_ERROR || z == -0) z = 0;
+    }
+
+public:
+
+    double x, y, z, h;
+
+    Vector3 (double x = 0, double y = 0, double z = 0)
+        : x(x), y(y), z(z), h(0) { clean(); }
+    Vector3 (double x, double y, double z, int h)
+        : x(x), y(y), z(z), h(h) { clean(); }
+    Vector3 (Vector3 v, int h)
+        : x(v.x), y(v.y), z(v.z), h(h) { clean(); }
+    Vector3 (double m[4])
+        : x(m[0]), y(m[1]), z(m[2]), h(m[3]) { clean(); }
+
+    // Vector module
+    double mod() const {
+        return sqrt((x * x) + (y * y) + (z * z));
+    }
+
+    // Vector asignation.
+    void operator=(Vector3 v) {
+        x = v.x;
+        y = v.y;
+        z = v.z;
+        clean();
+    }
+
+    // Vector add.
+    void operator+=(Vector3 v) {
+        x += v.x;
+        y += v.y; 
+        z += v.z;
+    }
+
+    // Vector substract.
+    void operator-=(Vector3 v) {
+        x -= v.x;
+        y -= v.y;
+        z -= v.z;
+    }
+
+    void operator*=(double d) {
+        x *= d;
+        y *= d;
+        z *= d; 
+    }
+
+    const double& operator[](size_t i) const {
+        if (i == 0) {
+            return x;
+        } else if (i == 1) {
+            return y;
+        } else {
+            return z;
+        }
+    }
+
+};
+
+// Vector add.
+Vector3 operator+(Vector3 v, Vector3 w) {
+    return Vector3(v.x+w.x, v.y+w.y, v.z+w.z);
+}
+
+// Vector substract.
+Vector3 operator-(Vector3 v, Vector3 w) {
+    return Vector3(v.x-w.x, v.y-w.y, v.z-w.z);
+}
+
+// Vector sign change.
+Vector3 operator-(Vector3 v) {
+    return Vector3(-v.x, -v.y, -v.z);
+}
+
+// Vector dot product.
+double operator*(Vector3 v, Vector3 w) {
+    return (v.x * w.x) + (v.y * w.y) + (v.z * w.z) + (v.h * w.h);
+}
+
+// Vector scalar product.
+Vector3 operator*(Vector3 v, double r) {
+    return Vector3(v.x * r, v.y * r, v.z * r);
+}
+
+// Vector scalar product.
+Vector3 operator*(double r, Vector3 v) {
+    return v * r;
+}
+
+// Vector scalar division.
+Vector3 operator/(Vector3 v, double r) {
+    return Vector3(v.x/r, v.y/r, v.z/r);
+}
+
+// Vector division (be careful, this doesn't make sense).
+Vector3 operator/(Vector3 v, Vector3 w) {
+    return Vector3(v.x / w.x, v.y / w.y, v.z / w.z);
+}
+
+// Vector absolute.
+inline Vector3 abs(Vector3 v) {
+    if (v.x < 0) v.x *= -1;
+    if (v.y < 0) v.y *= -1;
+    if (v.z < 0) v.z *= -1;
+    return v;
+}
+
+// Angle between two vectors in radians.
+double rad(Vector3 v, Vector3 w) {
+    return acos((v * w)/(v.mod() * w.mod()));
+}
+
+// Angle between two vectors in grades.
+double grd(Vector3 v, Vector3 w) {
+    return rad(v, w) * (180/M_PI);
+}
+
+// Vector equality.
+bool operator==(Vector3 v, Vector3 w) {
+    return (v.x - w.x < EPSILON_ERROR) 
+        && (v.y - w.y < EPSILON_ERROR)
+        && (v.z - w.z < EPSILON_ERROR);
+}
+
+// Vector inequality.
+bool operator!=(Vector3 v, Vector3 w) {
+    return !(v == w);
+}
+
+// Direction normalization. By default, it normalize to the unitary value.
+Vector3 nor(Vector3 v, double mod = 1.0) {
+    return v * mod/v.mod();
+}
+
+// Vector cross product.
+Vector3 crs(Vector3 v, Vector3 w) {
+    return Vector3(
+        (v.y * w.z) - (v.z * w.y),
+        (v.z * w.x) - (v.x * w.z),
+        (v.x * w.y) - (v.y * w.x)
+    );
+}
+
+// How to rotate a vector in reference to other vector. Rotating a respect of b.
+// https://math.stackexchange.com/questions/511370/how-to-rotate-one-vector-about-another
+Vector3 rot(Vector3 a, Vector3 b, double r = M_PI/2) {
+
+    Vector3 abb = ((a*b)/(b*b))*b; // a component in the direction of b.
+    Vector3 abp = a - abb;         // a component in the direction orthogonal to b.
+    Vector3 w = crs(b, abp);       // w component, orthogonal to a and b.
+
+    double abp_m = abp.mod();
+    double x1 = cos(r)/abp_m;
+    double x2 = sin(r)/abp_m;
+    return (abp_m * (x1*abp + x2*w)) + abb;
+}
+
+// Orthonormal basis
+// https://graphics.pixar.com/library/OrthonormalB/paper.pdf
+std::vector<Vector3> orthonormal_basis(const Vector3& n) {
+
+    double sign = copysignf(1.0, n.z);
+    const double a = -1.0 / (sign + n.z);
+    const double b = n.x * n.y * a;
+    return {
+        Vector3(1.0 + sign * n.x * n.x * a, sign * b, -sign * n.x),
+        Vector3(b, sign + n.y * n.y *a, -n.y)
+    };
+
+}
+
+// Min values between two vectors.
+Vector3 min(const Vector3& a, const Vector3& b) {
+    return Vector3(std::min(a.x, b.x), std::min(a.y, b.y), std::min(a.z, b.z));
+}
+
+// Max values between two vectors.
+Vector3 max(const Vector3& a, const Vector3& b) {
+    return Vector3(std::max(a.x, b.x), std::max(a.y, b.y), std::max(a.z, b.z));
+}
+
+// Print vector out.
+std::ostream& operator<<(std::ostream& os, const Vector3& v) {
+    return os << "(" << v.x << "," << v.y << "," << v.z << ")";
+}
+
+// Initialize vector.
+void operator>>(std::istream& in, Vector3& v) {
+    in >> v.x >> v.y >> v.z;
+}
+
+/*
+void operator>>(std::istream& is, Vector3& v) {
+    std::cout << "\n    px: "; is >> v.x;
+    std::cout <<   "    py: "; is >> v.y;
+    std::cout <<   "    pz: "; is >> v.z; std::cout << "  )";
+    return is;
+}
+*/
+
+//===============================================================//
+// Ray: 3d ray.
+//===============================================================//
+
+class Ray {
+private:
+    // ...
+public:
+    Vector3 p, d;
+    Ray () : p(Vector3()) {}
+    Ray (Vector3 p, Vector3 d) : p(p), d(d) {}
+};
+
+std::ostream& operator<<(std::ostream& os, const Ray& r) {
+    return os << "RAY {" << "ORIGIN: " << r.p << ", DIRECTION: " << r.d << "}";
+}
+
+//===============================================================//
+// Matrix3: 3d matrix.
+//===============================================================//
+class Matrix3 {
+private:
+
+    // Coeficient matrix.
+    void cof3(double A[4][4], double temp[4][4], int row, int col, int n) {
+        int i = 0, j = 0;
+        for (int x = 0; x < n; x++) {
+            for (int y = 0; y < n; y++) {
+                if (x != row && y != col) {
+                    temp[i][j++] = A[x][y];
+                    if (j == n-1) {
+                        j = 0;
+                        i++;
+                    }
+                }
+            }
+        }
+    }
+
+    // Matrix determinant.
+    double det3(double A[4][4], int n) {
+        if (n == 1) return A[0][0];
+        
+        double d = 0, temp[4][4];
+        for (int f = 0; f < n; f++) {
+            if (A[0][f]) {
+                cof3(A, temp, 0, f, n);
+                d += (f % 2 == 0 ? 1 : -1) * A[0][f] * det3(temp, n - 1);
+            }
+        }
+        return d;
+    }
+
+    // Adjunct matrix.
+    void adj3(double A[4][4], double adj[4][4]) {
+        double temp[4][4];
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 4; j++) {
+                cof3(A, temp, i, j, 4);
+                adj[j][i] = (det3(temp, 4 - 1));
+                if (adj[j][i]) adj[j][i] *= (((i + j) % 2 == 0) ? 1 : -1);
+            }
+        }
+    }
+
+public:
+
+    double m[4][4]; // Matrix values.
+
+    Matrix3(bool identity = true) {
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 4; j++) m[i][j] = 0;
+        }
+        if (identity) { 
+            for (int i = 0; i < 4; i++) m[i][i] = 1;
+        }
+    }
+    Matrix3(double n[4][4]) {
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 4; j++) {
+                m[i][j] = n[i][j];
+            }
+        }
+    }
+    
+    virtual Matrix3 invert() {
+        double det = det3(m, 4);
+        if (!det) return *this;
+
+        double aux[4][4];
+        adj3(m, aux);
+
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 4; j++) {
+                aux[i][j] = aux[i][j] / det;
+            }
+        }
+        return Matrix3(aux);
+    }
+};
+
+// Matrix product.
+Matrix3 operator* (Matrix3 t1, Matrix3 t2) {
+    Matrix3 tf(false);
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+            tf.m[i][j] = Vector3(t1.m[i]) * 
+                Vector3(t2.m[0][j], t2.m[1][j], t2.m[2][j], t2.m[3][j]);
+        }
+    }
+    return tf;
+}
+
+// Matrix and vector product.
+Vector3 operator* (Matrix3 t, Vector3 v) {
+    return Vector3(
+        (Vector3(t.m[0]) * v),
+        (Vector3(t.m[1]) * v),
+        (Vector3(t.m[2]) * v),
+        (Vector3(t.m[3]) * v)
+    );
+}
+
+// Print matrix out.
+std::ostream& operator<< (std::ostream& os, const Matrix3& t) {
+    os << std::endl;
+    for (int i = 0; i < 4; i++) {
+        os << "[ ";
+        for (int j = 0; j < 4; j++) os << t.m[i][j] << " ";
+        os << "]" << std::endl;
+    }
+    return os;
+}
+
+//==============================//
+// 3d matrix translation.
+//==============================//
+class Matrix3Translation : public Matrix3 {
+private:
+    // ...
+public:
+
+    Matrix3Translation(double translation) {
+        m[0][3] = m[1][3] = m[2][3] = translation;
+    }
+
+    Matrix3Translation(double tx, double ty, double tz) {
+        m[0][3] = tx;
+        m[1][3] = ty;
+        m[2][3] = tz;
+    }
+
+    Matrix3 invert() override {
+        return Matrix3Translation(m[0][3] * -1, m[1][3] * -1, m[2][3] * -1);
+    }
+};
+
+//==============================//
+// 3d matrix scaling.
+//==============================//
+class Matrix3Scale : public Matrix3 {
+private:
+    // ...
+public:
+    Matrix3Scale(double scale) {
+        m[0][0] = m[1][1] = m[2][2] = scale;
+    }
+
+    Matrix3Scale(double sx, double sy, double sz) {
+        m[0][0] = sx;
+        m[1][1] = sy;
+        m[2][2] = sz;
+    }
+
+    Matrix3 invert() override {
+        return Matrix3Scale(1/m[0][0], 1/m[1][1], 1/m[2][2]);
+    }
+};
+
+//==============================//
+// 3d matrix rotation.
+//==============================//
+class Matrix3Rotation : public Matrix3 {
+private:
+    //double rotation;
+public:
+
+    Matrix3Rotation(int flags, double degrees) {
+        double r = (degrees * M_PI)/180;
+        if (flags & X_ROT) {
+            m[1][1] =  cos(r); if (std::abs(m[1][1]) < EPSILON_ERROR) m[1][1] = 0;
+            m[1][2] = -sin(r); if (std::abs(m[1][2]) < EPSILON_ERROR) m[1][2] = 0;
+            m[2][1] =  sin(r); if (std::abs(m[2][1]) < EPSILON_ERROR) m[2][1] = 0;
+            m[2][2] =  cos(r); if (std::abs(m[2][2]) < EPSILON_ERROR) m[2][2] = 0;   
+        } else if (flags & Y_ROT) {
+            m[0][0] =  cos(r); if (std::abs(m[0][0]) < EPSILON_ERROR) m[0][0] = 0;
+            m[0][2] =  sin(r); if (std::abs(m[0][2]) < EPSILON_ERROR) m[0][2] = 0;
+            m[2][0] = -sin(r); if (std::abs(m[2][0]) < EPSILON_ERROR) m[2][0] = 0;
+            m[2][2] =  cos(r); if (std::abs(m[2][2]) < EPSILON_ERROR) m[2][2] = 0;
+        } else if (flags & Z_ROT) {
+            m[0][0] =  cos(r); if (std::abs(m[0][0]) < EPSILON_ERROR) m[0][0] = 0;
+            m[0][1] = -sin(r); if (std::abs(m[0][1]) < EPSILON_ERROR) m[0][1] = 0;
+            m[1][0] =  sin(r); if (std::abs(m[1][0]) < EPSILON_ERROR) m[1][0] = 0;
+            m[1][1] =  cos(r); if (std::abs(m[1][1]) < EPSILON_ERROR) m[1][1] = 0;
+        }
+    }
+
+};
+
+// Ortogonal vector.
+Vector3 orto(Vector3 v, int flags, int sense) {
+    if (flags & X_ROT) v = Matrix3Rotation(X_ROT, sense * 90) * v;
+    if (flags & Y_ROT) v = Matrix3Rotation(Y_ROT, sense * 90) * v;
+    if (flags & Z_ROT) v = Matrix3Rotation(Z_ROT, sense * 90) * v;
+    return v;
+}
+
+// Vector rotation.
+Vector3 rot(Vector3 v, int flags, std::vector<double> r) {
+    if (flags & X_ROT) {
+        v = Matrix3Rotation(X_ROT, r[0]) * v;
+        r.erase(r.begin());
+    }
+    if (flags & Y_ROT) {
+        v = Matrix3Rotation(Y_ROT, r[0]) * v;
+        r.erase(r.begin());
+    }
+    if (flags & Z_ROT) {
+        v = Matrix3Rotation(Z_ROT, r[0]) * v;
+        r.erase(r.begin());
+    }
+    return v;
+}
+
+//==============================//
+// 3d matrix base change.
+//==============================//
+class Matrix3BaseChange : public Matrix3 {
+private:
+    // ...
+public:
+    Matrix3BaseChange() {}
+    Matrix3BaseChange(Vector3 u, Vector3 v, Vector3 w, Vector3 o) {
+        m[0][0] = u.x; m[0][1] = v.x; m[0][2] = w.x; m[0][3] = o.x;
+        m[1][0] = u.y; m[1][1] = v.y; m[1][2] = w.y; m[1][3] = o.y;
+        m[2][0] = u.z; m[2][1] = v.z; m[2][2] = w.z; m[2][3] = o.z;
+        m[3][0] = u.h; m[3][1] = v.h; m[3][2] = w.h; m[3][3] = o.h;
+    }
+};
+
+#endif

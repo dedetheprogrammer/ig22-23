@@ -1,9 +1,10 @@
 #pragma once
-#include <cassert>
+#ifndef IMAGE_H
+#define IMAGE_H
+
 #include <cmath>   
-#include <iomanip>  
-#include <ios> 
-#include <iostream>  
+#include <iomanip>
+#include <iostream>
 #include <sstream>
 #include "utils.hpp"
 
@@ -23,22 +24,25 @@ public:
     double R, G, B;
     // Default constructor.
     RGB() : R(0.0), G(0.0), B(0.0) {}
-    // Assign each channel the same integer value.
-    RGB(int C) : R(C/255.0), G(C/255.0), B(C/255.0) {}
     // Assign different integer values to each channel.
     RGB(int R, int G, int B) : R(R/255.0), G(G/255.0), B(B/255.0) {}
-    // Assign each channel the same decimal value.
-    RGB(double C) : R(C), G(C), B(C) {}
     // Assign different decimal values to each channel.
     RGB(double R, double G, double B) : R(R), G(G), B(B) {}
     // Assign the HEX value to the RGB channels.
     RGB(std::string hex) {
-        int r, g, b;
-        if (hex[0] != '#') hex = "#" + hex;
-        std::sscanf(hex.c_str(), "#%02x%02x%02x", &r, &g, &b);
-        R = r / 255.0;
-        G = r / 255.0;
-        B = r / 255.0;
+        if (hex[0] == '#') hex = hex.substr(1);
+        if (hex.length() == 6) {
+            // Obtaining the hex value.
+            std::stringstream ss;
+            ss << std::hex << hex;
+            // Storing it.
+            uint32_t hex_val;
+            ss >> hex_val;
+            // Decompounding it.
+            R = ((hex_val >> 16) & 0xff)/255.0;
+            G = ((hex_val >>  8) & 0xff)/255.0;
+            B = (hex_val & 0xff)/255.0;
+        }
     }
 
     double rad() const {
@@ -92,6 +96,10 @@ RGB operator*(const RGB& pixel, const double d) {
     return RGB(pixel.R * d, pixel.G * d, pixel.B * d);
 }
 
+RGB operator*(const double d, const RGB& pixel) {
+    return pixel * d;
+}
+
 RGB operator*(const RGB& fst, const RGB& snd) {
     return RGB(fst.R * snd.R, fst.G * snd.G, fst.B * snd.B);
 }
@@ -106,6 +114,10 @@ RGB operator^(const RGB& pixel, const double d) {
 
 bool operator==(const RGB& a, const RGB& b) {
     return a.R == b.R && a.G == b.G && a.B == b.B;
+}
+
+bool operator==(const RGB& a, const double& d) {
+    return a.R == d && a.G == d && a.B == d;
 }
 
 template <typename T>
@@ -174,13 +186,13 @@ public:
                         //      https://netpbm.sourceforge.net/doc/index.html
                         //      https://netpbm.sourceforge.net/doc/ppm.html#index
     std::string name;   // Name of the file.
-    double maxval;       // Maximum value of the color resolution in memory.
-    double memval;       // Maximum value of the color resolution generated in memory (after
+    double maxval;      // Maximum value of the color resolution in memory.
+    double memval;      // Maximum value of the color resolution generated in memory (after
                         //      tone mapping operations).
     int   width;        // Width of the ppm file.    
     int   height;       // Height of the ppm file.
-    int   colres;       // Maximum color resolution of the ppm file.
-    int   memres;       // Maximum color resolution of the ppm file that was generated in memory
+    uint64_t colres;    // Maximum color resolution of the ppm file.
+    uint64_t memres;    // Maximum color resolution of the ppm file that was generated in memory
                         //      (after tone mapping operations).
     Channels pixels;    // Image pixels data. A channel is conformed by Red, Green and Blue values 
                         //      (0..255, 0..65535). Alpha channel not supported.
@@ -203,7 +215,7 @@ public:
     Image(std::string file) {
         // Opening the PPM file.
         std::ifstream in(file);
-        assert(in.is_open() && "File not found.");
+        debug(!in.is_open(), "file '" + file + "' not found, check it out!", 1);
 
         // Reading PPM file header.
         has_color_key = false;
@@ -258,10 +270,10 @@ void export_image(Image& i, std::string name, bool LDR = false, bool convert = f
 
     for (auto& h : i.pixels) {
         for (auto& w : h) {
-            w = w * (convert && !LDR ? 255 : i.colres/i.maxval);
-            os << static_cast<int>(w.R) << " " 
-               << static_cast<int>(w.G) << " "
-               << static_cast<int>(w.B) << "     ";
+            //w = w * (convert && !LDR ? 255 : i.colres/i.maxval);
+            os << static_cast<uint64_t>(w.R * (convert && !LDR ? 255 : i.colres/i.maxval)) << " " 
+               << static_cast<uint64_t>(w.G * (convert && !LDR ? 255 : i.colres/i.maxval)) << " "
+               << static_cast<uint64_t>(w.B * (convert && !LDR ? 255 : i.colres/i.maxval)) << "     ";
         }
         os << "\n";
     }
@@ -309,3 +321,5 @@ void tone_mapping(Image& i, int flags, double c_map = 1.0, double e_map = 1.0, d
         }
     }
 }
+
+#endif
