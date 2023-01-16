@@ -1,15 +1,18 @@
 <!--# Informática Gráfica
 Ingenería Informática/Computing Engineering Unizar 2022-23.
 -->
-<div lang="en">
-  <h1>Project Title</h1>
-  <p>This is a description of the project in English.</p>
-</div>
-<div lang="es">
-  <h1>Título del proyecto</h1>
-  <p>Esta es una descripción del proyecto en español.</p>
-</div>
 
+# Multilanguage README Pattern
+[![en](https://img.shields.io/badge/lang-en-red.svg)](README.md)
+[![pt-br](https://img.shields.io/badge/lang-pt--br-green.svg)](README.pt-br.md)
+[![es](https://img.shields.io/badge/lang-es-yellow.svg)](README.es.md)
+
+
+
+Just another way to enable more than one language in our README.md files.
+
+---
+[![how-to](https://img.shields.io/badge/how--to-use-blue.svg)](https://github.com/jonatasemidio/multilanguage-readme-pattern/blob/master/STEPS.md)
 
 <!--
 
