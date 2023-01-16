@@ -10,9 +10,38 @@ This project is licensed under the terms of the [GNU General Public License v3.0
 [![pt-br](https://img.shields.io/badge/lang-pt--br-green.svg)](README.pt-br.md)
 -->
 
----
+## Next moves
+A list of the next moves in the project. Ordered in higher to lower priority:
+- [ ] Objects
+  - [ ] Revise intersections methods.
+  - [ ] New primitives.
+    - [ ] Circles.
+    - [ ] Elipsoids.
+    - [ ] Cones.
+    - [ ] Cylindres.
+    - [ ] Prisms.
+    - [ ] Constructive solid geometry.
+  - [ ] New material coefficients.
+  - [ ] Texturization.
+  - [ ] Normal mapping.
+  - [ ] 3d meshes refactorization.
+    - [ ] 3d meshes sets.
+    - [ ] Operations.
+    - [ ] Shading techniques.
+- [ ] Cameras.
+  - [ ] Depth of field.
+  - [ ] Motion blur.
+- [ ] Interactive UI.
+  - [ ] A render visual program.
+  - [ ] A new whole debug system.
+- [ ] Performance techniques.
+  - [ ] Graphics card execution refactorization.
+  - [ ] Multithreading.
+  - [ ] Bounding volume hierarchies.
+  - [ ] Distributed threading.
+- [ ] Participating media.
 
-# Scenes:
+## **Scenes**
 ![Hola](scenes/scene8-512ppp_4lightpoints.png)
 
 ![Hola](scenes/scene4-512ppp_cinematic.png)
