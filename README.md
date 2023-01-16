@@ -18,6 +18,7 @@ A list of the next moves in the project. Ordered in higher to lower priority:
     - [ ] Circles.
     - [ ] Elipsoids.
     - [ ] Cones.
+    - [ ] Plane polygons.
     - [ ] Cylindres.
     - [ ] Prisms.
     - [ ] Constructive solid geometry.
@@ -28,18 +29,24 @@ A list of the next moves in the project. Ordered in higher to lower priority:
     - [ ] 3d meshes sets.
     - [ ] Operations.
     - [ ] Shading techniques.
+    - [ ] Export 3d mesh.
 - [ ] Cameras.
   - [ ] Depth of field.
   - [ ] Motion blur.
 - [ ] Interactive UI.
   - [ ] A render visual program.
   - [ ] A new whole debug system.
+- [ ] Debugger
+  - [ ] Add a periodically friendly reminder telling you how many time has passed. Maybe show it always.
 - [ ] Performance techniques.
   - [ ] Graphics card execution refactorization.
   - [ ] Multithreading.
   - [ ] Bounding volume hierarchies.
   - [ ] Distributed threading.
 - [ ] Participating media.
+- [ ] Tone mapping
+  - [ ] Advanced tone mapping techniques.
+  - [ ] Spectral rendering.
 
 ## **Scenes**
 ![Hola](scenes/scene8-512ppp_4lightpoints.png)
