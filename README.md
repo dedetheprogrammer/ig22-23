@@ -49,12 +49,13 @@ A list of the next moves in the project. Ordered in higher to lower priority:
   - [ ] Spectral rendering.
 
 ## **Scenes**
-![Hola](scenes/scene8-512ppp_4lightpoints.png)
+<div style="display:flex;">
+  <img src="scenes/scene8-512ppp_4lightpoints.png" alt="4 lightpoints scene" style="flex:1;">
+  <img src="scenes/scene10-256ppp_superliminal.png" alt="Superliminal easter egg scene" style="flex:1;">
+</div>
 
 ![Hola](scenes/scene4-512ppp_cinematic.png)
 
 ![Hola](scenes/scene13-512ppp_cinematic-blue.png)
 
 ![Hola](scenes/scene6-512ppp_new-hdr.png)
-
-![Hola](scenes/scene10-256ppp_superliminal.png)
