@@ -429,10 +429,7 @@ public:
 //--------------------------------
 class Object {
 private:
-    virtual std::ostream& print(std::ostream& os) = 0; // He tenido que cargarme un 
-                                                       // poquito el overload para que 
-                                                       // se pudiese printear cualquier
-                                                       // objeto.
+    // ...
 public:
 
     // Object info.
@@ -455,16 +452,7 @@ public:
 
 class Plane : public Object {
 private:
-    // Print plane attributes.
-    std::ostream& print(std::ostream& os) override {
-        return os;
-            //<< "PLANE {"
-            //<< "\n  normal: "   << n 
-            //<< "\n  distance: " << D 
-            //<< "\n  finite plane bounds: " << b
-            //<< "\n  material: " << m
-            //<< "\n}";
-    }
+    // ...
 public:
     // Default constructor.
     Plane() {}
@@ -540,7 +528,6 @@ public:
         }
         */
 
-
         // Devolver la normal correcta junto con la distancia al punto de corte.
         return Collision(retN, x, t);
     }
@@ -571,16 +558,7 @@ public:
 //===============================================================//
 class Triangle : public Plane {
 private:
-    // Print plane attributes.
-    std::ostream& print(std::ostream& os) override {
-        return os;
-            //<< "PLANE {"
-            //<< "\n  normal: "   << n 
-            //<< "\n  distance: " << D 
-            //<< "\n  finite plane bounds: " << b
-            //<< "\n  material: " << m
-            //<< "\n}";
-    }
+    // ...
 public:
     Triangle() {}
     Triangle(std::vector<Vector3> pos, std::vector<Vector3> norm = {}, std::vector<VectorUV> uv = {}, Material mat = Material()) : Plane(pos, norm, uv, mat) {}
@@ -612,21 +590,34 @@ public:
 };
 
 //===============================================================//
+// Cone
+//===============================================================//
+class Cone : public Object {
+private:
+    // ...
+public:
+    Vector3 center;  // Cone origin.
+    Vector3 axis;    // Cone axis (orientation).
+    double aperture; // Cone angle aperture.
+
+    Cone(Vector3 center, Vector3 axis, double aperture)
+        : center(center), axis(axis), aperture(aperture) {}
+
+    Collision intersects(const Ray& r) override {
+
+        return Collision(-1);
+    }
+
+};
+
+
+//===============================================================//
 // Sphere
 //===============================================================//
 
 class Sphere : public Object {
 private:
-    // Print plane attributes.
-    std::ostream& print(std::ostream& os) override {
-        return os;
-            //<< "PLANE {"
-            //<< "\n  normal: "   << n 
-            //<< "\n  distance: " << D 
-            //<< "\n  finite plane bounds: " << b
-            //<< "\n  material: " << m
-            //<< "\n}";
-    }
+    //...
 public:
     Sphere(Vector3 center, Vector3 axis, Material mat = Material()) : Object(Bounds(center, axis), mat) {}
 
@@ -671,16 +662,7 @@ public:
 
 class Cube : public Object {
 private:
-    // Print plane attributes.
-    std::ostream& print(std::ostream& os) override {
-        return os;
-            //<< "PLANE {"
-            //<< "\n  normal: "   << n 
-            //<< "\n  distance: " << D 
-            //<< "\n  finite plane bounds: " << b
-            //<< "\n  material: " << m
-            //<< "\n}";
-    }
+    // ...
 public:
     
     // Cube bounds representation:
@@ -814,17 +796,6 @@ private:
         Vector3 n;
         VectorUV uv;
     };
-
-    // Print plane attributes.
-    std::ostream& print(std::ostream& os) override {
-        return os;
-            //<< "PLANE {"
-            //<< "\n  normal: "   << n 
-            //<< "\n  distance: " << D 
-            //<< "\n  finite plane bounds: " << b
-            //<< "\n  material: " << m
-            //<< "\n}";
-    }
 public:
 
     std::vector<Triangle> faces; // Mesh faces.
