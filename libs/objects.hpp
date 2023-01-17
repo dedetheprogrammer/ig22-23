@@ -426,7 +426,6 @@ public:
 // Objects
 //=================================================================//
 
-//--------------------------------
 class Object {
 private:
     // ...
@@ -437,7 +436,8 @@ public:
     Material m; // Object material.
     Box_collider collider; // Object box collider.
 
-    Object(Bounds b = Bounds(), Material mat = Material()) : b(b), m(mat) {}
+    Object(Material m = Material()) : m(m) {} 
+    Object(Bounds b, Material mat = Material()) : b(b), m(mat) {}
 
     virtual ~Object() = default;
 
@@ -454,6 +454,12 @@ class Plane : public Object {
 private:
     // ...
 public:
+    // Geometrical properties.
+    double D;               // Implicit equation A*x + B*y + C*z + D
+                            //    (= 0 if the point is in the plane).
+    Vector3 n;              // Normal of the plane = (A,B,C).
+    std::vector<Vector3> b; // Vertex bounds of the plane (if finite).
+
     // Default constructor.
     Plane() {}
 
@@ -462,12 +468,14 @@ public:
     // ==========================
 
     // Solid color plane defined by a normal and its distance to the origin.
-    Plane(double D, Vector3 n, Material mat = Material()) : Object(Bounds(nor(n),D), mat) {}
+    Plane(double D, Vector3 n, Material m = Material())
+        : Object(m), D(D), n(nor(n)), b({}) {}
 
     // Plane defined by a normal and a plane contained point with solid color.
-    Plane(Vector3 p, Vector3 n, Material mat = Material()) : Object(Bounds(), mat) {
-        b.normal = nor(n);
-        b.D = -b.normal*p;
+    Plane(Vector3 p, Vector3 n, Material m = Material()) : Object(m) {
+        this->n = n;
+        this->D = -p * this->n;
+        this->b = {};
     }
 
     // ==========================
@@ -476,12 +484,10 @@ public:
     //Plane(double D, std::vector<Vector3> b, Material m = Material())
     //    : Object(m), D(D), n(nor(crs(b[1]-b[0], b[3]-b[0]))), b(b) {}
 
-    Plane(std::vector<Vector3> pos, std::vector<Vector3> norm = {}, std::vector<VectorUV> uv = {}, Material mat = Material()) : Object(Bounds(), mat) {
-        b.vP = pos;
-        b.vN = norm;
-        b.vUV = uv;
-        b.normal = nor(crs(pos[1]-pos[0], pos[2]-pos[0]));
-        b.D = -b.normal*pos[0];
+    Plane(std::vector<Vector3> b, Material m = Material()) : Object(m) {
+        this->n = nor(crs(b[1]-b[0], b[2]-b[0]));
+        this->D = -b[0] * n;
+        this->b = {};
     }
 
     // B +----+ C
@@ -491,56 +497,34 @@ public:
     Collision intersects(const Ray& r) override {
 
         // Si la division es 0 no hay corte.
-        auto retN = (b.normal * r.d < 0) ? b.normal : -b.normal;
-        auto fix = r.p + (b.normal * 0.00001);
-        if (std::abs(b.normal*r.d) < 0) return Collision(-1);
+        auto fix = r.p + (n * 0.00001);
+        if (std::abs(n*r.d) < 0) return Collision(-1);
 
         // Calcula la distancia desde el centro del rayo hasta el punto de corte.
-        double t = -(b.normal*fix + b.D)/(b.normal*r.d);                                
+        double t = -(n*fix + D)/(n*r.d);                                
         if (t < 0) return Collision(-1);
 
-        Vector3 x = (r.d * t + fix);
-
         // Extra check for all edges if bounded
-        for (uint32_t i = 0; i < b.vP.size(); i++) {
-            if (retN * crs(b.vP[(i+1) % b.vP.size()] - b.vP[i], x - b.vP[i]) < 0) {
+        Vector3 x = (r.d * t + fix), usn = (n * r.d < 0) ? n : -n;
+        for (uint32_t i = 0; i < b.size(); i++) {
+            if (usn * crs(b[(i+1) % b.size()] - b[i], x - b[i]) < 0) {
                 return Collision(-1);
             }
         }
 
-        /*
-        if (b.vP.size() == b.vN.size()) {
-                // Calculate centroid of the polygon
-                Vector3 C = Vector3();
-                for (auto v : b.vP) C += v;
-                C = C / b.vP.size();
-
-                Vector3 CtoX = x - C;
-
-                for (uint32_t i = 0; i < b.vP.size(); i++) {
-                    Vector3 CtoV = b.vP[i] - C;
-                    double dist = CtoX * CtoV;
-                    dist = (dist > 0) ? dist : 0;
-
-                    retN += b.vN[i] * 2 * dist / b.vP.size();
-                }
-                retN = nor(retN);
-        }
-        */
-
         // Devolver la normal correcta junto con la distancia al punto de corte.
-        return Collision(retN, x, t);
+        return Collision(usn, x, t);
     }
 
     // Print plane properties.
     void print(std::ostream& os, int i) override {
         std::string s = bleeding("  ", i);
         os << s + "PLANE {"
-            << "\n" + s + "  normal: " << b.normal 
-            << "\n" + s + "  distance: " << b.D
+            << "\n" + s + "  normal: " << n 
+            << "\n" + s + "  distance: " << D
             << "\n" + s + "  finite plane bounds {";
-        if (b.vP.size()) {
-            for (auto& v : b.vP) {
+        if (b.size()) {
+            for (auto& v : b) {
                 os << " " << v;
             }
             os << " }\n";
@@ -560,11 +544,14 @@ class Triangle : public Plane {
 private:
     // ...
 public:
+    // Default constructor.
     Triangle() {}
-    Triangle(std::vector<Vector3> pos, std::vector<Vector3> norm = {}, std::vector<VectorUV> uv = {}, Material mat = Material()) : Plane(pos, norm, uv, mat) {}
+    // Triangle boundings.
+    Triangle(std::vector<Vector3> b, Material m = Material()) : Plane(b, m) {}
 
     Collision intersects(const Ray& r) override {
-        // Plane::intersects performs an n-edge check also valid for Triangle implementation
+        // Plane::intersects performs an n-edge check also valid for Triangle
+        // implementation:
         return Plane::intersects(r);
     }
 
@@ -572,10 +559,10 @@ public:
     void print(std::ostream& os, int i) override {
         std::string s = bleeding("  ", i);
         os << s + "TRIANGLE {"
-            << "\n" + s + "  normal: " << b.normal
+            << "\n" + s + "  normal: " << n
             << "\n" + s + "  triangle bounds {";
-        if (b.vP.size()) {
-            for (auto& v : b.vP) {
+        if (b.size()) {
+            for (auto& v : b) {
                 os << "\n" + s + "    " << v;
             }
             os << "\n" + s + "  }\n";
@@ -619,7 +606,15 @@ class Sphere : public Object {
 private:
     //...
 public:
-    Sphere(Vector3 center, Vector3 axis, Material mat = Material()) : Object(Bounds(center, axis), mat) {}
+    // Geometrical properties:
+    double  radius; // Sphere radius.
+    Vector3 center; // Sphere center.
+    Vector3 axis;   // Sphere axis.
+
+    Sphere(double radius, Vector3 center, Material m = Material())
+        : Object(m), radius(radius), center(center) {}
+    Sphere(Vector3 center, Vector3 axis, Material m = Material())
+        : Object(m), radius(axis.mod()/2), center(center), axis(axis) {}
 
     Collision intersects(const Ray& r) override {
 
@@ -647,9 +642,9 @@ public:
     void print(std::ostream& os, int i) override {
         std::string s = bleeding("  ", i);
         os << s + "SPHERE {"
-            << "\n" + s + "  center: " << b.c
-            << "\n" + s + "  axis: " << b.normal
-            << "\n" + s + "  radius: " << b.r << "\n";
+            << "\n" + s + "  center: " << center
+            << "\n" + s + "  axis: "   << axis
+            << "\n" + s + "  radius: " << radius << "\n";
         m.print(os, i+1);
         os << s + "}\n";
     }
@@ -664,6 +659,9 @@ class Cube : public Object {
 private:
     // ...
 public:
+
+    Vector3 center;
+    std::vector<Vector3> b;
     
     // Cube bounds representation:
     //        b[5]             max (b[6])
@@ -680,43 +678,64 @@ public:
     // Default constructor.
     Cube() {}
     // Cube constructor with the minimum and maximum bounds.
-    Cube(Vector3 min, Vector3 max, Material mat = Material()) : Object(Bounds(), mat) {
+    Cube(Vector3 min, Vector3 max, Material m = Material()) : Object(m) {
 
         // Vertex order:
-        b.vP.push_back(min);                          // b[0]: -x, -y, -z.
-        b.vP.push_back(Vector3(min.x, max.y, min.z)); // b[1]: -x, +y, -z.
-        b.vP.push_back(Vector3(max.x, max.y, min.z)); // b[2]: +x, +y, -z.
-        b.vP.push_back(Vector3(max.x, min.y, min.z)); // b[3]: +x, -y, -z.
-        b.vP.push_back(Vector3(min.x, min.y, max.z)); // b[4]: -x, -y, +z.
-        b.vP.push_back(Vector3(min.x, max.y, max.z)); // b[5]: -x, +y, +z.
-        b.vP.push_back(max);                          // b[6]: +x, +y, +z.
-        b.vP.push_back(Vector3(max.x, min.y, max.z)); // b[7]: +x, -y, +z.
-
+        b.push_back(min);                          // b[0]: -x, -y, -z.
+        b.push_back(Vector3(min.x, max.y, min.z)); // b[1]: -x, +y, -z.
+        b.push_back(Vector3(max.x, max.y, min.z)); // b[2]: +x, +y, -z.
+        b.push_back(Vector3(max.x, min.y, min.z)); // b[3]: +x, -y, -z.
+        b.push_back(Vector3(min.x, min.y, max.z)); // b[4]: -x, -y, +z.
+        b.push_back(Vector3(min.x, max.y, max.z)); // b[5]: -x, +y, +z.
+        b.push_back(max);                          // b[6]: +x, +y, +z.
+        b.push_back(Vector3(max.x, min.y, max.z)); // b[7]: +x, -y, +z.
         // Faces order:
-        faces.push_back(Plane({b.vP[0],b.vP[1],b.vP[2],b.vP[3]}, {}, {}, m)); // Front face.
-        faces.push_back(Plane({b.vP[3],b.vP[2],b.vP[6],b.vP[7]}, {}, {}, m)); // Right face.
-        faces.push_back(Plane({b.vP[7],b.vP[6],b.vP[5],b.vP[4]}, {}, {}, m)); // Back face.
-        faces.push_back(Plane({b.vP[4],b.vP[5],b.vP[1],b.vP[0]}, {}, {}, m)); // Left face.
-        faces.push_back(Plane({b.vP[1],b.vP[5],b.vP[6],b.vP[2]}, {}, {}, m)); // Top face.
-        faces.push_back(Plane({b.vP[0],b.vP[3],b.vP[7],b.vP[4]}, {}, {}, m)); // Bottom face.
+        faces.push_back(Plane({b[0],b[1],b[2],b[3]}, m)); // Front face.
+        faces.push_back(Plane({b[3],b[2],b[6],b[7]}, m)); // Right face.
+        faces.push_back(Plane({b[7],b[6],b[5],b[4]}, m)); // Back face.
+        faces.push_back(Plane({b[4],b[5],b[1],b[0]}, m)); // Left face.
+        faces.push_back(Plane({b[1],b[5],b[6],b[2]}, m)); // Top face.
+        faces.push_back(Plane({b[0],b[3],b[7],b[4]}, m)); // Bottom face.
 
     }
+
     // Cube constructor with each vertice.
-    Cube(std::vector<Vector3> pos, Material mat = Material()) : Object(Bounds(pos), mat) {
-
-        // Note: Cube vertices initialized in constructor
-
+    Cube(std::vector<Vector3> b, Material m = Material()) : Object(m) {
+        
+        // Vertex order:
+        this->b = b;
         // Cube faces:
-        faces.push_back(Plane({b.vP[0],b.vP[1],b.vP[2],b.vP[3]}, {}, {}, m)); // Front face.
-        faces.push_back(Plane({b.vP[3],b.vP[2],b.vP[6],b.vP[7]}, {}, {}, m)); // Right face.
-        faces.push_back(Plane({b.vP[7],b.vP[6],b.vP[5],b.vP[4]}, {}, {}, m)); // Back face.
-        faces.push_back(Plane({b.vP[4],b.vP[5],b.vP[1],b.vP[0]}, {}, {}, m)); // Left face.
-        faces.push_back(Plane({b.vP[1],b.vP[5],b.vP[6],b.vP[2]}, {}, {}, m)); // Top face.
-        faces.push_back(Plane({b.vP[0],b.vP[3],b.vP[7],b.vP[4]}, {}, {}, m)); // Bottom face.
+        faces.push_back(Plane({b[0],b[1],b[2],b[3]}, m)); // Front face.
+        faces.push_back(Plane({b[3],b[2],b[6],b[7]}, m)); // Right face.
+        faces.push_back(Plane({b[7],b[6],b[5],b[4]}, m)); // Back face.
+        faces.push_back(Plane({b[4],b[5],b[1],b[0]}, m)); // Left face.
+        faces.push_back(Plane({b[1],b[5],b[6],b[2]}, m)); // Top face.
+        faces.push_back(Plane({b[0],b[3],b[7],b[4]}, m)); // Bottom face.
 
     }
+
     // Cube constructor with each plane.
-    Cube(std::vector<Plane> faces, Material mat = Material()) : Object(Bounds(), mat), faces(faces) {
+    Cube(std::vector<Plane> faces) : Object(m), faces(faces) {
+
+        // We might still want the vertices of our cube, so we will also extract them
+        debug(faces.size() != 6, "This is not a cube, what is this?");
+
+        // Following our cube bounds representation:
+        // Front face
+        b.push_back(faces[0].b[0]);
+        b.push_back(faces[0].b[1]);
+        b.push_back(faces[0].b[2]);
+        b.push_back(faces[0].b[3]);
+        
+        // Back face
+        b.push_back(faces[2].b[3]);
+        b.push_back(faces[2].b[2]);
+        b.push_back(faces[2].b[1]);
+        b.push_back(faces[2].b[0]);
+    }
+
+    // Cube constructor with each plane.
+    Cube(std::vector<Plane> faces, Material m) : Object(m), faces(faces) {
 
         // Change the faces' materials to that of our cube
         for (auto& f : faces) f.m = m;
@@ -726,16 +745,16 @@ public:
 
         // Following our cube bounds representation:
         // Front face
-        b.vP.push_back(faces[0].b.vP[0]);
-        b.vP.push_back(faces[0].b.vP[1]);
-        b.vP.push_back(faces[0].b.vP[2]);
-        b.vP.push_back(faces[0].b.vP[3]);
+        b.push_back(faces[0].b[0]);
+        b.push_back(faces[0].b[1]);
+        b.push_back(faces[0].b[2]);
+        b.push_back(faces[0].b[3]);
         
         // Back face
-        b.vP.push_back(faces[2].b.vP[3]);
-        b.vP.push_back(faces[2].b.vP[2]);
-        b.vP.push_back(faces[2].b.vP[1]);
-        b.vP.push_back(faces[2].b.vP[0]);
+        b.push_back(faces[2].b[3]);
+        b.push_back(faces[2].b[2]);
+        b.push_back(faces[2].b[1]);
+        b.push_back(faces[2].b[0]);
     }
 
     Collision intersects(const Ray& r) override {
@@ -749,7 +768,6 @@ public:
             }
         }
         if (c.dist > 0 && c.dist != INFINITY) {
-            //c.normal = -c.normal;
             return c;
         } else {
             return Collision(-1);
@@ -797,23 +815,21 @@ private:
         VectorUV uv;
     };
 public:
-
+    std::vector<std::vector<Triangle>> parts;
     std::vector<Triangle> faces; // Mesh faces.
 
-    Mesh(std::vector<Triangle> faces, Material mat = Material()) : Object(Bounds(), mat), faces(faces)
+    Mesh(std::vector<Triangle> faces, Material m) : Object(m), faces(faces)
     {   
         for (auto& f : faces) {
             f.m = m;
-            for (auto& v : f.b.vP) {
+            for (auto& v : f.b) {
                 collider.b[0] = min(collider.b[0], v);
                 collider.b[1] = max(collider.b[1], v);
             }
         }
     }
 
-    Mesh(std::string ply_file, Material mat = Material()) : Object(Bounds(), mat) {
-
-        bool read_n = false, read_uv = false;
+    Mesh(std::string ply_file, Material m = Material()) : Object(m) {
 
         // Reading the PLY file:
         std::string s("");
@@ -828,10 +844,7 @@ public:
                 vertex = std::vector<Ply_Vertex>(
                     std::stoi(replace(s, int_d))
                 );
-            }
-            else if (s.find("property float nx") != std::string::npos) read_n = true;
-            else if (s.find("property float s") != std::string::npos) read_uv = true;
-            else if (s.find("element face") != std::string::npos) {
+            } else if (s.find("element face") != std::string::npos) {
                 faces  = std::vector<Triangle>(
                     std::stoi(replace(s, int_d))
                 );
@@ -842,8 +855,6 @@ public:
         // Reading the PLY vertex list:
         for (auto& v : vertex) {
             in >> v.pos;
-            if (read_n) in >> v.n;
-            if (read_uv) in >> v.uv;
             // Defining the mesh collider.
             collider.b[0] = min(collider.b[0], v.pos);
             collider.b[1] = max(collider.b[1], v.pos);
@@ -853,23 +864,7 @@ public:
         int n, v1, v2, v3;
         for (auto& f : faces) {
             in >> n >> v1 >> v2 >> v3;
-
-            std::vector<Vector3> pos, n;
-            std::vector<VectorUV> uv;
-
-            pos = {vertex[v1].pos, vertex[v2].pos, vertex[v3].pos};
-            if (read_n) n = {vertex[v1].n, vertex[v2].n, vertex[v3].n};
-            if (read_uv) uv = {vertex[v1].uv, vertex[v2].uv, vertex[v3].uv};
-
-            f = Triangle(pos, n, uv, m);
-
-            // check normal
-            //if (f.b.normal * ((f.b.vP[0]+f.b.vP[1]+f.b.vP[2])/3 - collider.center) > EPSILON_ERROR) {
-            //    pos = {vertex[v1].pos, vertex[v3].pos, vertex[v2].pos};
-            //    if (read_n) n = {vertex[v1].n, vertex[v3].n, vertex[v2].n};
-            //    if (read_uv) uv = {vertex[v1].uv, vertex[v3].uv, vertex[v2].uv};
-            //    f = Triangle(pos, n, uv, m);
-            //}
+            f = Triangle({vertex[v1].pos, vertex[v2].pos, vertex[v3].pos}, m);
         }
     }
 
@@ -915,13 +910,13 @@ Mesh operator*(Mesh mesh, Matrix3 transform) {
 
     mesh.collider = Box_collider();
     for (auto& f : mesh.faces) {
-        for (auto& v : f.b.vP) {
+        for (auto& v : f.b) {
             v.h = 1;
             v = transform * v;
             mesh.collider.b[0] = min(mesh.collider.b[0], v);
             mesh.collider.b[1] = max(mesh.collider.b[1], v);
         }
-        f = Triangle(f.b.vP, f.b.vN, f.b.vUV, f.m);
+        f = Triangle(f.b, f.m);
     }
     return mesh;
 
