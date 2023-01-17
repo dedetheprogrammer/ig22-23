@@ -39,6 +39,7 @@
 # Images
 *ppm
 *ply
+*prefabs*
 
 # Depuration
 *.dSYM
