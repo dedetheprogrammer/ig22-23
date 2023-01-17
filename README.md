@@ -12,9 +12,9 @@ This project is licensed under the terms of the [GNU General Public License v3.0
 
 ## Next moves
 A list of the next moves in the project. Ordered in higher to lower priority:
-- [ ] Objects
+- [ ] Objects:
   - [ ] Revise intersections methods.
-  - [ ] New primitives.
+  - [ ] New primitives:
     - [ ] Circles.
     - [ ] Elipsoids.
     - [ ] Cones.
@@ -25,37 +25,38 @@ A list of the next moves in the project. Ordered in higher to lower priority:
   - [ ] New material coefficients.
   - [ ] Texturization.
   - [ ] Normal mapping.
-  - [ ] 3d meshes refactorization.
+  - [ ] 3d meshes refactorization:
     - [ ] 3d meshes sets.
     - [ ] Operations.
     - [ ] Shading techniques.
     - [ ] Export 3d mesh.
-- [ ] Cameras.
+- [ ] Cameras:
   - [ ] Depth of field.
   - [ ] Motion blur.
-- [ ] Interactive UI.
+- [ ] Interactive UI:
   - [ ] A render visual program.
   - [ ] A new whole debug system.
-- [ ] Debugger
+- [ ] Debugger:
   - [ ] Add a periodically friendly reminder telling you how many time has passed. Maybe show it always.
-- [ ] Performance techniques.
+- [ ] Performance techniques:
   - [ ] Graphics card execution refactorization.
   - [ ] Multithreading.
   - [ ] Bounding volume hierarchies.
   - [ ] Distributed threading.
 - [ ] Participating media.
-- [ ] Tone mapping
+- [ ] Tone mapping:
   - [ ] Advanced tone mapping techniques.
   - [ ] Spectral rendering.
 
 ## **Scenes**
-<div style="display:flex;">
-  <img src="scenes/scene8-512ppp_4lightpoints.png" alt="4 lightpoints scene" style="flex:1;">
-  <img src="scenes/scene10-256ppp_superliminal.png" alt="Superliminal easter egg scene" style="flex:1;">
+
+<div style="display:flex; flex-direction: row; justify-content: center;">
+  <div style="display:flex; justify-content: center;">
+    <img src="scenes/scene8-512ppp_4lightpoints.png" alt="4 lightpoints scene" width="49%" hspace="0.25%">
+    <img src="scenes/scene10-256ppp_superliminal.png" alt="Superliminal easter egg scene" width="49%">
+  </div>
+  <img src="scenes/scene4-512ppp_cinematic.png" alt="Superliminal easter egg scene" width="99%">
+  <img src="scenes/scene13-512ppp_cinematic-blue.png" alt="Superliminal easter egg scene" width="99%">
+  <img src="scenes/scene6-512ppp_new-hdr.png" alt="Superliminal easter egg scene" width="99%">
 </div>
 
-![Hola](scenes/scene4-512ppp_cinematic.png)
-
-![Hola](scenes/scene13-512ppp_cinematic-blue.png)
-
-![Hola](scenes/scene6-512ppp_new-hdr.png)
