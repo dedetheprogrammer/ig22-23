@@ -577,26 +577,93 @@ public:
 };
 
 //===============================================================//
-// Cone
+// Cone (NOT DEBUGGED)
 //===============================================================//
 class Cone : public Object {
 private:
-    // ...
-public:
-    Vector3 center;  // Cone origin.
+    // An expresion that delimits the intersections inside the cone angle.
+    double ang_restrict; 
+public:   
+    double aperture; // Cone angle aperture (in radians).
+    // double height;   // Cone height.
+    // double radius;   // Cone radius.
+    Vector3 apex;    // Cone apex (or vertice).
     Vector3 axis;    // Cone axis (orientation).
-    double aperture; // Cone angle aperture.
 
-    Cone(Vector3 center, Vector3 axis, double aperture)
-        : center(center), axis(axis), aperture(aperture) {}
+    Cone(double aperture, Vector3 apex, Vector3 axis) {
+        this->aperture = aperture * M_PI/360;
+        ang_restrict   = std::cos(this->aperture) * std::cos(this->aperture);
+        //this->heigth = apex.mod();
+        //this->radius = height * std::tan(this->aperture);
+        this->apex     = apex;
+        this->axis     = axis;
+    }
 
     Collision intersects(const Ray& r) override {
 
-        return Collision(-1);
+        // Direction from the cone vertex and the ray origin.
+        Vector3 L = r.p - apex;
+        // Calculate equation coefficients.
+        double a = (r.d*r.d) - (ang_restrict * (r.d*axis));
+        double b = 2*((r.d*L) - (ang_restrict * (r.d*axis) * (L*axis)));
+        double c = (L*L) - (ang_restrict * (L*axis) * (L*axis));
+        double discr = (b*b) - (a*c);
+        if (discr < 0) Collision(-1);
+        // Solve the 2nd grade equation.
+        double t0 = (-b - std::sqrt(discr))/a;
+        double t1 = (-b + std::sqrt(discr))/a;
+        if (t0 <= EPSILON_ERROR && t1 <= EPSILON_ERROR) return Collision(-1);
+        if (t0 > EPSILON_ERROR) {
+            Vector3 x = r.d * t0 + r.p;
+            return Collision(nor(x - apex), x, t0);
+        } else {
+            Vector3 x = r.d * t1 + r.p;
+            return Collision(nor(x - apex), x, t1);
+        }
     }
 
 };
 
+//===============================================================//
+// Cylinder (NOT DEBUGGED)
+//===============================================================//
+class Cylinder : public Object {
+private:
+    // ...
+public:
+    Vector3 center; // Cylinder center.
+    Vector3 axis;   // Cylinder axis (thus height and orientation).
+    double radius;  // Cylinder base radius.
+
+    Cylinder(Vector3 center, Vector3 axis, double radius)
+        : center(center), axis(axis), radius(radius) {}
+
+    Collision intersects(const Ray& r) override {
+        // Vector from cylinder center to ray origin.
+        Vector3 L = r.p - center;
+        double t_ca = L * axis;
+        double d_ca = r.d * axis;
+        Vector3 p_ca = axis * t_ca;
+        Vector3 V = L - p_ca;
+        double v_length_sq = V*V;
+        double d_sq = d_ca * d_ca;
+        double discr = (radius * radius) * d_sq - v_length_sq * d_ca * d_ca;
+        if (discr < 0) return Collision(-1); 
+
+        double t1 = (t_ca + sqrt(discr)) / d_sq;
+        double t2 = (t_ca - sqrt(discr)) / d_sq;
+        if (t1 <= EPSILON_ERROR && t2 <= EPSILON_ERROR) return Collision(-1);
+        if (t1 > EPSILON_ERROR) {
+            Vector3 x = r.d * t1 + r.p;
+            Vector3 x_axis = center + (axis * ((x - center) * axis));
+            return Collision(nor(x - x_axis), x, t1);
+        } else {
+            Vector3 x = r.d * t2 + r.p;
+            Vector3 x_axis = center + (axis * ((x - center) * axis));
+            return Collision(nor(x - x_axis), x, t2);
+        }
+    }
+};
 
 //===============================================================//
 // Sphere
