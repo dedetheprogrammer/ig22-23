@@ -590,7 +590,7 @@ public:
     Vector3 apex;    // Cone apex (or vertice).
     Vector3 axis;    // Cone axis (orientation).
 
-    Cone(double aperture, Vector3 apex, Vector3 axis) {
+    Cone(double aperture, Vector3 apex, Vector3 axis, Material m = Material()) : Object(m) {
         this->aperture = aperture * M_PI/360;
         ang_restrict   = std::cos(this->aperture) * std::cos(this->aperture);
         //this->heigth = apex.mod();
@@ -612,14 +612,22 @@ public:
         // Solve the 2nd grade equation.
         double t0 = (-b - std::sqrt(discr))/a;
         double t1 = (-b + std::sqrt(discr))/a;
-        if (t0 <= EPSILON_ERROR && t1 <= EPSILON_ERROR) return Collision(-1);
+        // Calculate collision point and normal.
         if (t0 > EPSILON_ERROR) {
             Vector3 x = r.d * t0 + r.p;
             return Collision(nor(x - apex), x, t0);
-        } else {
+        } else if (t1 > EPSILON_ERROR) {
             Vector3 x = r.d * t1 + r.p;
             return Collision(nor(x - apex), x, t1);
+        } else {
+            return Collision(-1);
         }
+    }
+
+    // Print triangle properties.
+    void print(std::ostream& os, int i) override {
+        std::string s = bleeding("  ", i);
+        os << s + "CONE {" << s + "}\n";
     }
 
 };

@@ -37,6 +37,20 @@
 int main (int argc, char* argv[]) {
 
     Scene s({
+        std::make_shared<Pinhole_camera>(Pinhole_camera(Vector3(0,0,-3.5), 100, Camera::HORIZONTAL, 3.5, 12, 300, 300)),
+    }, {
+        std::make_shared<Plane>(Plane(1, Vector3(1,0,0) , Material(RGB(240,240,240)))), //Plano de la izquierda
+        std::make_shared<Plane>(Plane(1, Vector3(-1,0,0), Material(RGB(240,240,240)))), //Plano de la derecha
+        std::make_shared<Plane>(Plane(1, Vector3(0,1,0) , Material(RGB(240,0,0)))), //Plano de abajo
+        std::make_shared<Plane>(Plane(1, Vector3(0,-1,0), Material(RGB(240,240,240)))), //Plano de arriba
+        std::make_shared<Plane>(Plane(1, Vector3(0,0,-1), Material(RGB(240,240,240)))), //Plano de atrás
+        std::make_shared<Cone>(Cone(40, Vector3(0,0.5,0), Vector3(0,-0.5,0), Material(RGB(0,190,0)))),
+    }, {
+        Light(Vector3(0,0.5,0), RGB(1.0, 1.0, 1.0))
+    });
+
+    /*
+    Scene s00({
         std::make_shared<Pinhole_camera>(Pinhole_camera(Vector3(0,-0.9, -2), -22, 0, -4, 120, Camera::HORIZONTAL, 3.1, 128, 1280, 720)),
     },
     {
@@ -82,7 +96,7 @@ int main (int argc, char* argv[]) {
         std::make_shared<Plane>(Plane(1, Vector3(0,-1,0), Material(RGB(240,240,240)))), //Plano de arriba
         std::make_shared<Plane>(Plane(1, Vector3(0,0,-1), Material(RGB(240,240,240)))), //Plano de atrás
         std::make_shared<Sphere>(Sphere(Vector3(-0.5,-0.7,0.25), 0.3, Material(RGB(240, 110, 203), RGB(80,80,80)))), // Esfera de la izquierda
-        std::make_shared<Sphere>(Sphere(Vector3(0.5,-0.7,-0.25), 0.3, Material(RGB(/*125,200,200*/), RGB(25,25,25), RGB(230,230,230), RGB(), 1.5))), // Esfera de la derecha
+        std::make_shared<Sphere>(Sphere(Vector3(0.5,-0.7,-0.25), 0.3, Material(RGB(), RGB(25,25,25), RGB(230,230,230), RGB(), 1.5))), // Esfera de la derecha
     }, {
         Light(Vector3(0,0.5,0), RGB(1.0, 1.0, 1.0)),
     });
@@ -175,7 +189,7 @@ int main (int argc, char* argv[]) {
         std::make_shared<Plane>(Plane(1, Vector3(1,0,0) , Material(RGB(210,0,0), RGB(), RGB()))), //Plano de la izquierda
         std::make_shared<Plane>(Plane(1, Vector3(-1,0,0), Material(RGB(13, 99, 219), RGB(), RGB()))), //Plano de la derecha
         std::make_shared<Plane>(Plane(1, Vector3(0,1,0) , Material(RGB(240,240,240)))), //Plano de abajo
-        std::make_shared<Plane>(Plane(1, Vector3(0,-1,0), Material(RGB(240,240,240), RGB(), RGB(), RGB(/*1.0, 1.0, 1.0*/)))), //Plano de arriba
+        std::make_shared<Plane>(Plane(1, Vector3(0,-1,0), Material(RGB(240,240,240), RGB(), RGB(), RGB()))), //Plano de arriba
         std::make_shared<Plane>(Plane(1, Vector3(0,0,-1), Material(RGB(240,240,240)))), //Plano de atrás
         std::make_shared<Sphere>(Sphere(Vector3(-0.5,-0.7,0.25), 0.3, Material(RGB(240, 110, 203)))), // Esfera de la izquierda
         std::make_shared<Sphere>(Sphere(Vector3(0.5,-0.7,-0.25), 0.3, Material(RGB(125,200,200)))), // Esfera de la derecha
@@ -190,7 +204,7 @@ int main (int argc, char* argv[]) {
         std::make_shared<Plane>(Plane(1, Vector3(1,0,0) , Material(RGB(210,0,0), RGB(), RGB()))), //Plano de la izquierda
         std::make_shared<Plane>(Plane(1, Vector3(-1,0,0), Material(RGB(13, 99, 219), RGB(), RGB()))), //Plano de la derecha
         std::make_shared<Plane>(Plane(1, Vector3(0,1,0) , Material(RGB(240,240,240)))), //Plano de abajo
-        std::make_shared<Plane>(Plane(1, Vector3(0,-1,0), Material(RGB(240,240,240), RGB(), RGB(), RGB(/*1.0, 1.0, 1.0*/)))), //Plano de arriba
+        std::make_shared<Plane>(Plane(1, Vector3(0,-1,0), Material(RGB(240,240,240), RGB(), RGB(), RGB()))), //Plano de arriba
         std::make_shared<Plane>(Plane(1, Vector3(0,0,-1), Material(RGB(240,240,240)))), //Plano de atrás
         std::make_shared<Sphere>(Sphere(Vector3(-0.5,-0.7,0.25), 0.3, Material(RGB(240, 110, 203)))), // Esfera de la izquierda
         std::make_shared<Sphere>(Sphere(Vector3(0.5,-0.7,-0.25), 0.3, Material(RGB(125,200,200)))), // Esfera de la derecha
@@ -223,7 +237,7 @@ int main (int argc, char* argv[]) {
         std::make_shared<Plane>(Plane(1, Vector3(1,0,0) , Material(RGB(41, 154, 230), RGB(), RGB()))), //Plano de la izquierda
         std::make_shared<Plane>(Plane(1, Vector3(-1,0,0), Material(RGB(41, 154, 230), RGB(), RGB()))), //Plano de la derecha
         std::make_shared<Plane>(Plane(1, Vector3(0,1,0) , Material(RGB(227, 174, 59)))), //Plano de abajo
-        std::make_shared<Plane>(Plane(1, Vector3(0,-1,0), Material(RGB(240,240,240), RGB(), RGB(), RGB(/*1.0, 1.0, 1.0*/)))), //Plano de arriba
+        std::make_shared<Plane>(Plane(1, Vector3(0,-1,0), Material(RGB(240,240,240), RGB(), RGB(), RGB()))), //Plano de arriba
         std::make_shared<Plane>(Plane(1, Vector3(0,0,-1), Material(RGB(41, 154, 230)))), //Plano de atrás
         std::make_shared<Sphere>(Sphere(Vector3(0, -0.7, 0), 0.3, Material(RGB(125,200,200)))), // Esfera de la derecha
     }, {
@@ -237,7 +251,7 @@ int main (int argc, char* argv[]) {
         std::make_shared<Plane>(Plane(1, Vector3(1,0,0) , Material(RGB(240,240,240), RGB(), RGB()))), //Plano de la izquierda
         std::make_shared<Plane>(Plane(1, Vector3(-1,0,0), Material(RGB(240,240,240), RGB(), RGB()))), //Plano de la derecha
         std::make_shared<Plane>(Plane(1, Vector3(0,1,0) , Material(RGB(107, 99, 67)))), //Plano de abajo
-        std::make_shared<Plane>(Plane(1, Vector3(0,-1,0), Material(RGB(240,240,240), RGB(), RGB(), RGB(/*1.0, 1.0, 1.0*/)))), //Plano de arriba
+        std::make_shared<Plane>(Plane(1, Vector3(0,-1,0), Material(RGB(240,240,240), RGB(), RGB(), RGB()))), //Plano de arriba
         std::make_shared<Plane>(Plane(1, Vector3(0,0,-1), Material(RGB(240,240,240)))), //Plano de atrás
         std::make_shared<Cube>(Cube(Vector3(-1,-1,-0.1), Vector3(1,-0.7,1), Material(RGB(107, 99, 67)))),
         std::make_shared<Sphere>(Sphere(Vector3(-0.65,-0.4,0.3), 0.3, Material(RGB(207, 219, 31)))), // Esfera de la izquierda
@@ -248,6 +262,7 @@ int main (int argc, char* argv[]) {
     }, {
         Light(Vector3(0,0.5,0), RGB(1.0, 1.0, 1.0)),
     });
+    */
 
 
     int N_BOUNCES = 15;
