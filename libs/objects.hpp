@@ -576,6 +576,32 @@ public:
 
 };
 
+class Circle : public Plane {
+private:
+    //...
+public:
+    Vector3 center;
+    double radius;
+
+    Circle() : Plane(Vector3(), Vector3(), Material()) {}
+    Circle(Vector3 center, Vector3 normal, double radius, Material m = Material())
+        : Plane(center, normal, m), center(center), radius(radius) {}
+
+    Collision intersects(const Ray& r) override {
+        auto xc = Plane::intersects(r);
+        if (xc.dist < 0) return Collision(-1);
+        if ((xc.point - center).mod() > radius) return Collision(-1);
+        return xc;
+    }
+
+    // Print triangle properties.
+    void print(std::ostream& os, int i) override {
+        std::string s = bleeding("  ", i);
+        os << s + "CIRCLE {" << s + "}\n";
+    }
+
+};
+
 //===============================================================//
 // Cone (NOT DEBUGGED)
 //===============================================================//
@@ -584,41 +610,92 @@ private:
     // An expresion that delimits the intersections inside the cone angle.
     double ang_restrict; 
 public:   
-    double aperture; // Cone angle aperture (in radians).
-    // double height;   // Cone height.
-    // double radius;   // Cone radius.
-    Vector3 apex;    // Cone apex (or vertice).
-    Vector3 axis;    // Cone axis (orientation).
+    Vector3 C; // Cone center.
+    Vector3 H; // Cone axis.
+    Vector3 h;
+    double angle;
+    double radius;  // Cone radius.
+    double height;
+    double m;
+    Circle bottom;
 
-    Cone(double aperture, Vector3 apex, Vector3 axis, Material m = Material()) : Object(m) {
-        this->aperture = aperture * M_PI/360;
-        ang_restrict   = std::cos(this->aperture) * std::cos(this->aperture);
-        //this->heigth = apex.mod();
-        //this->radius = height * std::tan(this->aperture);
-        this->apex     = apex;
-        this->axis     = axis;
+    Cone(Vector3 C, Vector3 H, double radius, Material m = Material()) : Object(m) {
+        this->C = C;
+        this->H = H;
+        this->h = nor(C-H);
+        this->radius = radius;
+        this->height = (C-H).mod();
+        this->angle  = std::atan(radius/height);
+        this->m = (radius*radius)/(height*height);
+        bottom = Circle(C, h, radius, m);
     }
 
     Collision intersects(const Ray& r) override {
+        /*
+        double A = r.p.x - C.x;
+        double B = r.p.z - C.z;
+        double D = height - r.p.y + C.y;
+        double tan = (radius/height)*(radius/height);
 
-        // Direction from the cone vertex and the ray origin.
-        Vector3 L = r.p - apex;
-        // Calculate equation coefficients.
-        double a = (r.d*r.d) - (ang_restrict * (r.d*axis));
-        double b = 2*((r.d*L) - (ang_restrict * (r.d*axis) * (L*axis)));
-        double c = (L*L) - (ang_restrict * (L*axis) * (L*axis));
-        double discr = (b*b) - (a*c);
-        if (discr < 0) Collision(-1);
-        // Solve the 2nd grade equation.
-        double t0 = (-b - std::sqrt(discr))/a;
-        double t1 = (-b + std::sqrt(discr))/a;
-        // Calculate collision point and normal.
-        if (t0 > EPSILON_ERROR) {
-            Vector3 x = r.d * t0 + r.p;
-            return Collision(nor(x - apex), x, t0);
-        } else if (t1 > EPSILON_ERROR) {
-            Vector3 x = r.d * t1 + r.p;
-            return Collision(nor(x - apex), x, t1);
+        float a = (r.d.x*r.d.x) + (r.d.z*r.d.z) - (tan*(r.d.y*r.d.y));
+        float b = (2*A*r.d.x) + (2*B*r.d.z) + (2*tan*D*r.d.y);
+        float d = A*A + B*B - tan*D*D;
+
+        float discr = b*b - 4*a*d;
+        if(discr < EPSILON_ERROR) return Collision(-1);
+        double t1 = (-b - sqrt(discr))/(2*a);
+        double t2 = (-b + sqrt(discr))/(2*a);
+        double t = t1 < t2? t1: t2;
+
+        Vector3 x = r.p + t*r.d;
+        // If it doesn't hit cylinder walls
+        if(x.y < C.y || x.y > (C.y + height)) {
+            // Cannot intersect with cap because ray is parallel:
+            if(Vector3(0,-1,0) * r.d < EPSILON_ERROR) return Collision(-1);
+
+            float t = ((C - r.p) * Vector3(0,-1,0)) / (Vector3(0,-1,0)*r.d);
+            x = r.p + t * r.d;
+            auto tmp = C - x;
+            if(tmp*tmp > radius*radius){
+                return Collision(-1);
+            }
+            return Collision(Vector3(0,-1,0), x, t);
+
+        } else {
+            Vector3 n = x - C;
+            n.y = (n - Vector3(0,n.y,0)).mod() * (radius/height);
+            return Collision(nor(n), x, t);
+        }*/
+
+        // Calculating if the bottom cap was intersected:
+        auto prev_c = bottom.intersects(r);
+
+        // If not, calculating if the walls were intersected:
+        Vector3 L = r.p - H;
+        double a = (r.d*r.d) - (m+1)*((r.d*h)*(r.d*h));
+        double b = 2*((r.d*L) - (m+1)*((r.d*h)*(L*h)));
+        double c = (L*L) - (m+1)*((L*h)*(L*h));
+
+        double discr = b*b - (4*a*c), t;
+        if (discr < 0) return Collision(-1);
+        //else if (discr == 0) {
+        //    if((r.d * h) == (height/sqrt(height*height + radius*radius))) {
+        //        return Collision(-1);
+        //    } else {
+        //        t = -b/(2*a);
+        //    }
+        else {
+            double t0 = (-b - sqrt(discr))/(2*a);
+            double t1 = (-b + sqrt(discr))/(2*a);
+            t = t0 < t1 ? t0 : t1;
+        }
+        if (prev_c.dist > 0 && prev_c.dist <= t) return prev_c;
+
+        Vector3 x = r.p + t*r.d;
+        if ((x-H)*h > 0 && (x-C)*h < 0) {
+            Vector3 R = nor(x-H, sqrt(height*height + radius*radius));
+            Vector3 n = nor(crs(x-H,x-R));
+            return Collision((r.d*n < 0) ? n : -n, x, t);
         } else {
             return Collision(-1);
         }
@@ -627,7 +704,7 @@ public:
     // Print triangle properties.
     void print(std::ostream& os, int i) override {
         std::string s = bleeding("  ", i);
-        os << s + "CONE {" << s + "}\n";
+        os << s + "CONE {" << C-H << ", " << h << "}\n";
     }
 
 };

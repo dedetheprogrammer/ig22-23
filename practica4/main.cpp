@@ -37,17 +37,19 @@
 int main (int argc, char* argv[]) {
 
     Scene s({
-        std::make_shared<Pinhole_camera>(Pinhole_camera(Vector3(0,0,-3.5), 100, Camera::HORIZONTAL, 3.5, 12, 300, 300)),
+        std::make_shared<Pinhole_camera>(Pinhole_camera(Vector3(0,0,-3.5), 100, Camera::HORIZONTAL, 3.5, 32, 256, 256)),
     }, {
         std::make_shared<Plane>(Plane(1, Vector3(1,0,0) , Material(RGB(240,240,240)))), //Plano de la izquierda
         std::make_shared<Plane>(Plane(1, Vector3(-1,0,0), Material(RGB(240,240,240)))), //Plano de la derecha
         std::make_shared<Plane>(Plane(1, Vector3(0,1,0) , Material(RGB(240,0,0)))), //Plano de abajo
         std::make_shared<Plane>(Plane(1, Vector3(0,-1,0), Material(RGB(240,240,240)))), //Plano de arriba
         std::make_shared<Plane>(Plane(1, Vector3(0,0,-1), Material(RGB(240,240,240)))), //Plano de atrás
-        std::make_shared<Cone>(Cone(40, Vector3(0,0.5,0), Vector3(0,-0.5,0), Material(RGB(0,190,0)))),
+        std::make_shared<Cone>(Cone(Vector3(0,-0.5,0), Vector3(0,-0.1,0.5), 0.25, Material(RGB(0,190,0)))),
+        //std::make_shared<Circle>(Circle(Vector3(0,0,0), Vector3(0,0,-1), 0.25, Material(RGB(0,190,0)))),
     }, {
-        Light(Vector3(0,0.5,0), RGB(1.0, 1.0, 1.0))
+        Light(Vector3(0,-0.5,-0.25), RGB(1.0, 1.0, 1.0))
     });
+    s.objects[5]->print(std::cout, 0);
 
     /*
     Scene s00({

@@ -15,11 +15,11 @@ A list of the next moves in the project. Ordered in higher to lower priority:
 - [ ] Objects:
   - [ ] Revise intersections methods.
   - [ ] New primitives:
-    - [ ] Circles.
+    - [x] Circles.
     - [ ] Elipsoids.
-    - [ ] Cones.
+    - [ ] (IN PROGRESS) Cones.
     - [ ] Plane polygons.
-    - [ ] Cylindres.
+    - [ ] (IN PROGRESS) Cylindres.
     - [ ] Prisms.
     - [ ] Constructive solid geometry.
   - [ ] New material coefficients.
