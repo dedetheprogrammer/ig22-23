@@ -54,7 +54,7 @@ A list of the next moves in the project. Ordered in higher to lower priority:
 
 ## **Scenes**
 
-<div align=center>
+<div align="center">
   <div style="display:flex;">
     <img src="scenes/scene8-512ppp_4lightpoints.png" alt="4 lightpoints scene" width="49%" hspace="0.25%">
     <img src="scenes/scene10-256ppp_superliminal.png" alt="Superliminal easter egg scene" width="49%">
