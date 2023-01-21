@@ -627,7 +627,7 @@ public:
         this->height = (C-H).mod();
         this->angle  = std::atan(radius/height);
         this->m = (radius*radius)/(height*height);
-        bottom = Circle(C, h, radius, m);
+        bottom = Circle(C, h, radius, Material(RGB(0,0,180)));
     }
 
     Collision intersects(const Ray& r) override {
@@ -667,10 +667,7 @@ public:
             return Collision(nor(n), x, t);
         }*/
 
-        // Calculating if the bottom cap was intersected:
-        auto prev_c = bottom.intersects(r);
-
-        // If not, calculating if the walls were intersected:
+        // Calculating if the cone was intersected:
         Vector3 L = r.p - H;
         double a = (r.d*r.d) - (m+1)*((r.d*h)*(r.d*h));
         double b = 2*((r.d*L) - (m+1)*((r.d*h)*(L*h)));
@@ -678,27 +675,39 @@ public:
 
         double discr = b*b - (4*a*c), t;
         if (discr < 0) return Collision(-1);
-        //else if (discr == 0) {
-        //    if((r.d * h) == (height/sqrt(height*height + radius*radius))) {
-        //        return Collision(-1);
-        //    } else {
-        //        t = -b/(2*a);
-        //    }
-        else {
+        else if (discr == 0) {
+            if((r.d * h) == (height/sqrt(height*height + radius*radius))) {
+                return Collision(-1);
+            } else {
+                t = -b/(2*a);
+            }
+        } else {
             double t0 = (-b - sqrt(discr))/(2*a);
             double t1 = (-b + sqrt(discr))/(2*a);
             t = t0 < t1 ? t0 : t1;
         }
-        if (prev_c.dist > 0 && prev_c.dist <= t) return prev_c;
+
+        // Calculating if the bottom cap was intersected:
+        //auto prev_c = bottom.intersects(r);
+        //if (prev_c.dist > 0 && prev_c.dist <= t) {
+        //    prev_c.obj = std::make_shared<Circle>(bottom);
+        //    return prev_c;
+        //}
 
         Vector3 x = r.p + t*r.d;
-        if ((x-H)*h > 0 && (x-C)*h < 0) {
+        if (0 <= (x-H)*h && (x-H)*h <= height) {
             Vector3 R = nor(x-H, sqrt(height*height + radius*radius));
             Vector3 n = nor(crs(x-H,x-R));
             return Collision((r.d*n < 0) ? n : -n, x, t);
-        } else {
-            return Collision(-1);
         }
+        return Collision(-1);
+        //if ((x-H)*h > 0 && (x-C)*h < 0) {
+        //    Vector3 R = nor(x-H, sqrt(height*height + radius*radius));
+        //    Vector3 n = nor(crs(x-H,x-R));
+        //    return Collision((r.d*n < 0) ? n : -n, x, t);
+        //} else {
+        //    return Collision(-1);
+        //}
     }
 
     // Print triangle properties.

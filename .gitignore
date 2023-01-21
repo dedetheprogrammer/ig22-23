@@ -45,5 +45,8 @@
 *.dSYM
 *.vs*
 
+# Paths
+*ignore*
+
 # Other
 *.DS_Store

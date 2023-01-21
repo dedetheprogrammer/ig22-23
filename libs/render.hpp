@@ -86,7 +86,7 @@ private:
             auto t = o->intersects(wo);
             if (t.dist > 0 && t.dist < c.dist) {
                 c = t;
-                c.obj = o;
+                if (c.obj == nullptr) c.obj = o;
             }
         }
         return c.obj->m.kd(c.obj->b, c.normal, c.point, Vector3(), -wo.d);
@@ -165,8 +165,8 @@ private:
         //  - Reflection.
         //  - Refraction.
         //  - More..?
-        indirect_light_contrib += path_tracing(s, Ray(c.point, samp.wi), c.obj, depth+1);
-        return direct_light_contrib + indirect_light_contrib * samp.fr;
+        //indirect_light_contrib += path_tracing(s, Ray(c.point, samp.wi), c.obj, depth+1);
+        return direct_light_contrib /*+ indirect_light_contrib * samp.fr*/;
     }
 
 

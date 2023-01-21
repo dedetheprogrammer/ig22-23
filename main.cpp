@@ -47,7 +47,7 @@ int main (int argc, char* argv[]) {
         std::make_shared<Cone>(Cone(Vector3(0,-0.5,0), Vector3(0,-0.1,0.5), 0.25, Material(RGB(0,190,0)))),
         //std::make_shared<Circle>(Circle(Vector3(0,0,0), Vector3(0,0,-1), 0.25, Material(RGB(0,190,0)))),
     }, {
-        Light(Vector3(0,-0.5,-0.25), RGB(1.0, 1.0, 1.0))
+        Light(Vector3(-0.7,-0.5,-0.25), RGB(1.0, 1.0, 1.0))
     });
     s.objects[5]->print(std::cout, 0);
 
@@ -275,4 +275,8 @@ int main (int argc, char* argv[]) {
     Render path_tracer(N_BOUNCES, N_THREADS);
     path_tracer.render(using_scene, using_camera);
     path_tracer.export_render(using_scene, using_camera, export_name );
+
+    //Render ray_tracer(N_THREADS);
+    //ray_tracer.render(using_scene, using_camera);
+    //ray_tracer.export_render(using_scene, using_camera, export_name);
 }
