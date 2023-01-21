@@ -1,8 +1,11 @@
 # Computer graphics
 Computing Engineering Unizar 2022-23.
 
-[![en](https://img.shields.io/badge/lang-en-red.svg)](README.md)
+This a continue of a project based in a university assigment to implement a ray tracing from scratch.
+
 [![es](https://img.shields.io/badge/lang-es-yellow.svg)](README_es.md)
+[![en](https://img.shields.io/badge/lang-en-red.svg)](README.md)
+
 <!--
 [![pt-br](https://img.shields.io/badge/lang-pt--br-green.svg)](README.pt-br.md)
 -->
@@ -51,6 +54,7 @@ A list of the next moves in the project. Ordered in higher to lower priority:
 - [ ] Tone mapping:
   - [ ] Advanced tone mapping techniques.
   - [ ] Spectral rendering.
+  - [ ] Bitmap export.
 
 ## **Scenes**
 
