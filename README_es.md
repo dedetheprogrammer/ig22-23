@@ -21,9 +21,9 @@ Una lista de los siguientes pasos que tengo pensados seguir. Supuestamente orden
   - [ ] Nuevas primitivas:
     - [x] Circulos.
     - [ ] Elipsoides.
-    - [ ] (IN PROGRESS) Conos.
+    - [x] (*No ha sido testeado con materiales, susceptible a fallos catastroficos) Conos.
     - [ ] Poligonos planos.
-    - [ ] (IN PROGRESS) Cilindros.
+    - [x] (*Las normales siguen un poco jodidas) Cilindros.
     - [ ] Prismas.
     - [ ] Geometría solida constructiva (CSG).
   - [ ] Nuevos coeficientes de materiales.

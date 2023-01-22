@@ -672,7 +672,6 @@ public:
     
     }
 
-    // https://www.cl.cam.ac.uk/teaching/1999/AGraphHCI/SMAG/node2.html#SECTION00024000000000000000
     Collision intersects(const Ray& ray) override {
 
         Ray r = world2local * ray;
@@ -681,15 +680,15 @@ public:
         double B = r.p.z - C.z;
         double D = height - r.p.y + C.y;
 
-        float a = (r.d.x*r.d.x) + (r.d.z*r.d.z) - (m*(r.d.y*r.d.y));
-        float b = (2*A*r.d.x) + (2*B*r.d.z) + (2*m*D*r.d.y);
-        float d = A*A + B*B - m*D*D;
+        double a = (r.d.x*r.d.x) + (r.d.z*r.d.z) - (m*(r.d.y*r.d.y));
+        double b = 2*((A*r.d.x) + (B*r.d.z) + (m*D*r.d.y));
+        double c = A*A + B*B - m*D*D;
 
-        float discr = b*b - 4*a*d;
+        double discr = b*b - 4*a*c;
         if(discr < EPSILON_ERROR) return Collision(-1);
-        double t1 = (-b - sqrt(discr))/(2*a);
-        double t2 = (-b + sqrt(discr))/(2*a);
-        double t = t1 < t2 ? t1: t2;
+        double t0 = (-b - sqrt(discr))/(2*a);
+        double t1 = (-b + sqrt(discr))/(2*a);
+        double t = t0 < t1 ? t0: t1;
 
         Vector3 x = r.p + t*r.d;
         // If it doesn't hit cone walls
@@ -702,7 +701,7 @@ public:
             x = r.p + t * r.d;
             if((C-x)*(C-x) > radius*radius) return Collision(-1);
 
-            Vector3 n = nor((H_o - C_o));
+            Vector3 n = nor(H_o - C_o);
             return Collision((r.d * n < 0) ? n : -n, local2world * Vector3(x,1), t);
 
         } else {
@@ -724,17 +723,103 @@ public:
 //===============================================================//
 class Cylinder : public Object {
 private:
-    // ...
+
+    Matrix3 world2local; // Matrix transformation from world to local.
+    Matrix3 local2world; // Matrix transformation from local to world.
+    Vector3 C;           // Axis origin Cylinder bottom center.
+    Vector3 T;           // Axis origin Cylinder top center;
+
+    inline void get_aligned_object() {
+
+        auto MT = Matrix3Translation(-C_0.x, -C_0.y, -C_0.z);
+        C = MT * Vector3(C_0, 1);
+        T = MT * Vector3(T_0, 1);
+
+        // X-Axis rotation:
+        double rot = 0;
+        if (T.y != 0) {
+            rot = std::atan(-T.z/T.y);
+            if (T.y < 0 && rot != 0) rot -= M_PI;
+        } else if (T.z != 0) {
+            rot = -M_PI/2*sign(T.z);
+        }
+        auto MRX = Matrix3Rotation(X_ROT, rot, Matrix3Rotation::RAD);
+        T = MRX * T;
+
+        // Z-Axis rotation:
+        rot = std::atan(T.x/T.y);
+        if (T.y < 0) rot -= M_PI;
+        auto MRZ = Matrix3Rotation(Z_ROT, rot, Matrix3Rotation::RAD);
+
+        // Coordinates matrices:
+        world2local = MRZ * MRX * MT;
+        local2world = world2local.invert();
+
+    }
+
 public:
-    Vector3 center; // Cylinder center.
-    Vector3 axis;   // Cylinder axis (thus height and orientation).
-    double radius;  // Cylinder base radius.
 
-    Cylinder(Vector3 center, Vector3 axis, double radius)
-        : center(center), axis(axis), radius(radius) {}
+    Vector3 C_0;   // Cylinder bottom center.
+    Vector3 T_0;   // Cylinder top center.
+    double radius; // Cylinder base radius.
+    double height; // Cylinder height.
 
-    Collision intersects(const Ray& r) override {
+    Cylinder(Vector3 C_0, Vector3 T_0, double radius, Material m = Material()) : Object(m) {
+        this->C_0 = C_0;
+        this->T_0 = T_0;
+        this->radius = radius;
+        this->height = (T_0-C_0).mod();
+        get_aligned_object();
+    }
 
+    Collision intersects(const Ray& ray) override {
+
+        // Getting the local ray.
+        Ray r = world2local * ray;
+
+        // Calculating everything as if the Cylinder was aligned with the Y-axis.
+        double a = (r.d.x*r.d.x) + (r.d.z * r.d.z);
+        double b = 2*(r.d.x*(r.p.x - C.x) + r.d.z*(r.p.z - C.z));
+        double c = (r.p.x - C.x)*(r.p.x - C.x) + (r.p.z - C.z)*(r.p.z - C.z) - (radius*radius);
+        
+        double discr = b*b - (4*a*c);
+        if (discr < 0) return Collision(-1);
+        double t0 = (-b - sqrt(discr))/(2*a);
+        double t1 = (-b + sqrt(discr))/(2*a);
+        double t = (t0 < t1) ? t0 : t1;
+
+        Vector3 x = r.d * t + r.p, n;
+	    // If it doesn't hit cylinder walls:
+        if (x.y < C.y || x.y > (C.y + height)) {
+
+            // Cannot intersect with caps because ray is parallel.
+            // if (Vector3(0,-1,0) * r.d < 1e-6) return Collision(-1);
+
+            t = ((C - r.p) * Vector3(0,-1,0))/(Vector3(0,-1,0)*r.d);
+            t1 = ((C - r.p + Vector3(0, height, 0)) * Vector3(0,1,0))/(Vector3(0,1,0)*r.d);
+            
+            Vector3 bias;
+            if (t > t1) {
+                t = t1;
+                bias.y = height;
+            }
+            x = r.d * t + r.p;
+            if ((C+bias-x)*(C+bias-x) > radius*radius) return Collision(-1);
+	
+		    if(std::abs(x.y - (C.y + height)) < 10e-6) n = nor(T-C);
+		    else if(std::abs(x.y - C.y) < 10e-6) n = nor(C-T);
+            else return Collision(-1);
+    
+        } else {
+            n = nor(local2world * Vector3(x.x - C.x, 0, x.z - C.z));
+        }
+
+        return Collision((r.d * n < 0) ? n : -n, local2world * Vector3(x,1), t);
+    }
+
+    // Print triangle properties.
+    void print(std::ostream& os, int i) override {
+        std::string s = bleeding("  ", i);
     }
 };
 

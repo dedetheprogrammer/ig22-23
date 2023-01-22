@@ -26,7 +26,7 @@ A list of the next moves in the project. Ordered in higher to lower priority:
     - [ ] Elipsoids.
     - [x] (*Note that materials were not tested, even maybe there can be rare bugs) Cones.
     - [ ] Plane polygons.
-    - [ ] (IN PROGRESS) Cylindres.
+    - [x] (*Normals are a bit broken) Cylindres.
     - [ ] Prisms.
     - [ ] Constructive solid geometry.
   - [ ] New material coefficients.
