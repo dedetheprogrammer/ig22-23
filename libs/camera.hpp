@@ -397,11 +397,11 @@ public:
 
         // Appling the orientation into the camera dimensions.
         // X-axis matrix rotation (pitch rotation).
-        Matrix3Rotation pitch_rotation(X_ROT, pitch);
+        Matrix3Rotation pitch_rotation(X_ROT, pitch, Matrix3Rotation::DGR);
         // Y-axis matrix rotation (yaw rotation).
-        Matrix3Rotation yaw_rotation(Y_ROT, yaw);
+        Matrix3Rotation yaw_rotation(Y_ROT, yaw, Matrix3Rotation::DGR);
         // Z-axis matrix rotation (roll rotation).
-        Matrix3Rotation roll_rotation(Z_ROT, roll);
+        Matrix3Rotation roll_rotation(Z_ROT, roll, Matrix3Rotation::DGR);
         
         // Updating camera dimension vectors.
         this->left  = pitch_rotation * yaw_rotation * roll_rotation * this->left;

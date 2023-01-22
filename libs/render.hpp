@@ -165,8 +165,9 @@ private:
         //  - Reflection.
         //  - Refraction.
         //  - More..?
-        //indirect_light_contrib += path_tracing(s, Ray(c.point, samp.wi), c.obj, depth+1);
-        return direct_light_contrib /*+ indirect_light_contrib * samp.fr*/;
+        indirect_light_contrib += path_tracing(s, Ray(c.point, samp.wi), c.obj, depth+1);
+        return direct_light_contrib
+            + indirect_light_contrib * samp.fr;
     }
 
 

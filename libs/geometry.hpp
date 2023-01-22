@@ -456,10 +456,20 @@ public:
         }
     }
 
+    /*
+    void operator*=(Matrix3 t) {
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 4; j++) {
+                m[i][j] = Vector3(m[i]) * 
+                    Vector3(t.m[0][j], t.m[1][j], t.m[2][j], t.m[3][j]);
+            }
+        }
+    }*/
+
 };
 
 // Matrix product.
-Matrix3 operator* (Matrix3 t1, Matrix3 t2) {
+Matrix3 operator*(Matrix3 t1, Matrix3 t2) {
     Matrix3 tf(false);
     for (int i = 0; i < 4; i++) {
         for (int j = 0; j < 4; j++) {
@@ -478,6 +488,15 @@ Vector3 operator* (Matrix3 t, Vector3 v) {
         (Vector3(t.m[2]) * v),
         (Vector3(t.m[3]) * v)
     );
+}
+
+// Matrix and ray product.
+Ray operator*(Matrix3 t, const Ray& r) {
+    Ray new_r = r;
+    new_r.p.h = 1;
+    new_r = Ray(t * new_r.p, t * new_r.d);
+    new_r.p.h = 0;
+    return new_r;
 }
 
 // Print matrix out.
@@ -549,9 +568,10 @@ class Matrix3Rotation : public Matrix3 {
 private:
     //double rotation;
 public:
+    enum ROTATION_UNIT {DGR,RAD};
 
-    Matrix3Rotation(int flags, double degrees) {
-        double r = (degrees * M_PI)/180;
+    Matrix3Rotation(int flags, double r, ROTATION_UNIT u) {
+        if (u == DGR) r *= M_PI/180;
         if (flags & X_ROT) {
             m[1][1] =  cos(r); if (std::abs(m[1][1]) < EPSILON_ERROR) m[1][1] = 0;
             m[1][2] = -sin(r); if (std::abs(m[1][2]) < EPSILON_ERROR) m[1][2] = 0;
@@ -574,14 +594,15 @@ public:
 
 // Ortogonal vector.
 Vector3 orto(Vector3 v, int flags, int sense) {
-    if (flags & X_ROT) v = Matrix3Rotation(X_ROT, sense * 90) * v;
-    if (flags & Y_ROT) v = Matrix3Rotation(Y_ROT, sense * 90) * v;
-    if (flags & Z_ROT) v = Matrix3Rotation(Z_ROT, sense * 90) * v;
+    if (flags & X_ROT) v = Matrix3Rotation(X_ROT, sense * 90, Matrix3Rotation::DGR) * v;
+    if (flags & Y_ROT) v = Matrix3Rotation(Y_ROT, sense * 90, Matrix3Rotation::DGR) * v;
+    if (flags & Z_ROT) v = Matrix3Rotation(Z_ROT, sense * 90, Matrix3Rotation::DGR) * v;
     return v;
 }
 
 // Vector rotation.
-Vector3 rot(Vector3 v, int flags, std::vector<double> r) {
+/*
+Vector3 rot(Vector3 v, int flags, std::vector<double> r, ) {
     if (flags & X_ROT) {
         v = Matrix3Rotation(X_ROT, r[0]) * v;
         r.erase(r.begin());
@@ -595,7 +616,7 @@ Vector3 rot(Vector3 v, int flags, std::vector<double> r) {
         r.erase(r.begin());
     }
     return v;
-}
+}*/
 
 //==============================//
 // 3d matrix base change.

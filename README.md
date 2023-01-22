@@ -24,7 +24,7 @@ A list of the next moves in the project. Ordered in higher to lower priority:
   - [ ] New primitives:
     - [x] Circles.
     - [ ] Elipsoids.
-    - [ ] (IN PROGRESS) Cones.
+    - [x] (*Note that materials were not tested, even maybe there can be rare bugs) Cones.
     - [ ] Plane polygons.
     - [ ] (IN PROGRESS) Cylindres.
     - [ ] Prisms.
@@ -55,6 +55,7 @@ A list of the next moves in the project. Ordered in higher to lower priority:
   - [ ] Advanced tone mapping techniques.
   - [ ] Spectral rendering.
   - [ ] Bitmap export.
+
 
 ## **Scenes**
 

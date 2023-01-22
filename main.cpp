@@ -44,12 +44,12 @@ int main (int argc, char* argv[]) {
         std::make_shared<Plane>(Plane(1, Vector3(0,1,0) , Material(RGB(240,0,0)))), //Plano de abajo
         std::make_shared<Plane>(Plane(1, Vector3(0,-1,0), Material(RGB(240,240,240)))), //Plano de arriba
         std::make_shared<Plane>(Plane(1, Vector3(0,0,-1), Material(RGB(240,240,240)))), //Plano de atrás
-        std::make_shared<Cone>(Cone(Vector3(0,-0.5,0), Vector3(0,-0.1,0.5), 0.25, Material(RGB(0,190,0)))),
+        std::make_shared<Cone>(Cone(Vector3(0,-0.5,0), Vector3(0.5,-0.5,0.5), 0.2, Material(RGB(0,190,0)))),
         //std::make_shared<Circle>(Circle(Vector3(0,0,0), Vector3(0,0,-1), 0.25, Material(RGB(0,190,0)))),
     }, {
-        Light(Vector3(-0.7,-0.5,-0.25), RGB(1.0, 1.0, 1.0))
+        Light(Vector3(0,0.5,0.1), RGB(1.0, 1.0, 1.0))
     });
-    s.objects[5]->print(std::cout, 0);
+
 
     /*
     Scene s00({
@@ -276,6 +276,18 @@ int main (int argc, char* argv[]) {
     path_tracer.render(using_scene, using_camera);
     path_tracer.export_render(using_scene, using_camera, export_name );
 
+    Cone(Vector3(0,0,0), Vector3(0.5,-0.5,0), 0.25); // x+, y+, z+;
+    //Cone(Vector3(0,0,0), Vector3(-0.5,0.5,0.1), 0.25); // x-, y+, z+;
+    //Cone(Vector3(0,0,0), Vector3(0.5,0.5,-0.1), 0.25); // x+, y+, z-;
+    //Cone(Vector3(0,0,0), Vector3(-0.5,0.5,-0.1), 0.25); // x-, y+, z-;
+    // Cone(Vector3(0,0,0), Vector3(0.5,-0.5,0.1), 0.25); // x+, y-, z+;
+    // Cone(Vector3(0,0,0), Vector3(-0.5,-0.5,0.1), 0.25); // x-, y-, z+;
+    // Cone(Vector3(0,0,0), Vector3(0.5,-0.5,-0.1), 0.25); // x+, y-, z-;
+    // Cone(Vector3(0,0,0), Vector3(-0.5,-0.5,-0.1), 0.25); // x-, y-, z-;
+    //Cone(Vector3(0,0,0), Vector3(0.5,0,0.5), 0.25); // x+, y=0, z+;
+    //Cone(Vector3(0,0,0), Vector3(0.5,0,-0.5), 0.25); // x+, y=0, z-;
+    //Cone(Vector3(0,0,0), Vector3(0.5,0.5,0), 0.25); // x+, y+, z=0;
+    
     //Render ray_tracer(N_THREADS);
     //ray_tracer.render(using_scene, using_camera);
     //ray_tracer.export_render(using_scene, using_camera, export_name);

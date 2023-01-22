@@ -603,117 +603,118 @@ public:
 };
 
 //===============================================================//
-// Cone (NOT DEBUGGED)
+// Cone (Not tested with materials)
 //===============================================================//
 class Cone : public Object {
 private:
-    // An expresion that delimits the intersections inside the cone angle.
-    double ang_restrict; 
-public:   
-    Vector3 C; // Cone center.
-    Vector3 H; // Cone axis.
-    Vector3 h;
-    double angle;
-    double radius;  // Cone radius.
-    double height;
-    double m;
-    Circle bottom;
 
-    Cone(Vector3 C, Vector3 H, double radius, Material m = Material()) : Object(m) {
-        this->C = C;
-        this->H = H;
-        this->h = nor(C-H);
-        this->radius = radius;
-        this->height = (C-H).mod();
-        this->angle  = std::atan(radius/height);
-        this->m = (radius*radius)/(height*height);
-        bottom = Circle(C, h, radius, Material(RGB(0,0,180)));
+    Matrix3 world2local;
+    Matrix3 local2world;
+
+    Vector3 C;     // Cone center in the origin.
+    Vector3 H;     // Cone vertice in the origin.
+    double  m;     // Cone geometry constant.
+    // Obtains the Y-axis aligned cone equivalent.
+    inline void get_aligned_cone() {
+
+        std::cout << "C: " << C_o << ", H: " << H_o << "\n";
+
+        // Traslating Cone points:
+        auto MT = Matrix3Translation(-C_o.x, -C_o.y, -C_o.z);
+        C = MT * Vector3(C_o, 1);
+        H = MT * Vector3(H_o, 1); 
+        std::cout << "New C: " << C << ", New H: " << H << "\n";
+
+        // Cone X-Axis rotation:
+        double rot = 0;
+        if (H.y != 0) {
+            rot = std::atan(-H.z/H.y);
+            if (H.y < 0 && rot != 0) rot -= M_PI;
+        } else if (H.z != 0) {
+            rot = -M_PI/2*sign(H.z);
+        }
+        std::cout << "X ROT: " << rot << "\n";
+        auto MRX = Matrix3Rotation(X_ROT, rot, Matrix3Rotation::RAD);
+        H = MRX * H;
+        std::cout << "New C: " << C << ", New H: " << H << "\n";
+
+        // Cone Y-Axis rotation:
+        rot = std::atan(H.x/H.y);
+        if (H.y < 0) rot -= M_PI;
+        std::cout << "Z ROT: " << rot << "\n";
+        auto MRZ = Matrix3Rotation(Z_ROT, rot, Matrix3Rotation::RAD);
+        H = MRZ * H;
+        std::cout << "New C: " << C << ", New H: " << H << "\n";
+
+        world2local = MRZ * MRX * MT;
+        local2world = world2local.invert();
+
+        std::cout << "Old C: " << local2world * Vector3(C,1) << ", Old H: " << local2world * Vector3(H,1) << "\n";
     }
 
-    Collision intersects(const Ray& r) override {
-        /*
+
+public: 
+
+    Vector3 C_o;   // Cone original center.
+    Vector3 H_o;   // Cone original vertice.
+    double radius; // Cone radius.
+    double height; // Cone height.
+
+    Cone(Vector3 C_o, Vector3 H_o, double radius, Material m = Material()) : Object(m) {
+
+        this->C_o = C_o;
+        this->H_o = H_o;
+        this->radius = radius;
+        this->height = (H_o-C_o).mod();
+        this->m = (radius*radius)/(height*height);
+
+        get_aligned_cone();
+    
+    }
+
+    // https://www.cl.cam.ac.uk/teaching/1999/AGraphHCI/SMAG/node2.html#SECTION00024000000000000000
+    Collision intersects(const Ray& ray) override {
+
+        Ray r = world2local * ray;
+    
         double A = r.p.x - C.x;
         double B = r.p.z - C.z;
         double D = height - r.p.y + C.y;
-        double tan = (radius/height)*(radius/height);
 
-        float a = (r.d.x*r.d.x) + (r.d.z*r.d.z) - (tan*(r.d.y*r.d.y));
-        float b = (2*A*r.d.x) + (2*B*r.d.z) + (2*tan*D*r.d.y);
-        float d = A*A + B*B - tan*D*D;
+        float a = (r.d.x*r.d.x) + (r.d.z*r.d.z) - (m*(r.d.y*r.d.y));
+        float b = (2*A*r.d.x) + (2*B*r.d.z) + (2*m*D*r.d.y);
+        float d = A*A + B*B - m*D*D;
 
         float discr = b*b - 4*a*d;
         if(discr < EPSILON_ERROR) return Collision(-1);
         double t1 = (-b - sqrt(discr))/(2*a);
         double t2 = (-b + sqrt(discr))/(2*a);
-        double t = t1 < t2? t1: t2;
+        double t = t1 < t2 ? t1: t2;
 
         Vector3 x = r.p + t*r.d;
-        // If it doesn't hit cylinder walls
+        // If it doesn't hit cone walls
         if(x.y < C.y || x.y > (C.y + height)) {
+
             // Cannot intersect with cap because ray is parallel:
-            if(Vector3(0,-1,0) * r.d < EPSILON_ERROR) return Collision(-1);
+            //if(Vector3(0,-1,0) * r.d < EPSILON_ERROR) return Collision(-1);
 
-            float t = ((C - r.p) * Vector3(0,-1,0)) / (Vector3(0,-1,0)*r.d);
+            t = ((C - r.p) * Vector3(0,-1,0))/(Vector3(0,-1,0)*r.d);
             x = r.p + t * r.d;
-            auto tmp = C - x;
-            if(tmp*tmp > radius*radius){
-                return Collision(-1);
-            }
-            return Collision(Vector3(0,-1,0), x, t);
+            if((C-x)*(C-x) > radius*radius) return Collision(-1);
+
+            Vector3 n = nor((H_o - C_o));
+            return Collision((r.d * n < 0) ? n : -n, local2world * Vector3(x,1), t);
 
         } else {
-            Vector3 n = x - C;
-            n.y = (n - Vector3(0,n.y,0)).mod() * (radius/height);
-            return Collision(nor(n), x, t);
-        }*/
-
-        // Calculating if the cone was intersected:
-        Vector3 L = r.p - H;
-        double a = (r.d*r.d) - (m+1)*((r.d*h)*(r.d*h));
-        double b = 2*((r.d*L) - (m+1)*((r.d*h)*(L*h)));
-        double c = (L*L) - (m+1)*((L*h)*(L*h));
-
-        double discr = b*b - (4*a*c), t;
-        if (discr < 0) return Collision(-1);
-        else if (discr == 0) {
-            if((r.d * h) == (height/sqrt(height*height + radius*radius))) {
-                return Collision(-1);
-            } else {
-                t = -b/(2*a);
-            }
-        } else {
-            double t0 = (-b - sqrt(discr))/(2*a);
-            double t1 = (-b + sqrt(discr))/(2*a);
-            t = t0 < t1 ? t0 : t1;
+            Vector3 w(x.x - C.x, 0, x.z - C.z);
+            Vector3 n = nor(local2world * Vector3(w.x, w.mod() * (radius/height), w.z));
+            return Collision((r.d * n < 0) ? n : -n, local2world * Vector3(x,1), t);
         }
-
-        // Calculating if the bottom cap was intersected:
-        //auto prev_c = bottom.intersects(r);
-        //if (prev_c.dist > 0 && prev_c.dist <= t) {
-        //    prev_c.obj = std::make_shared<Circle>(bottom);
-        //    return prev_c;
-        //}
-
-        Vector3 x = r.p + t*r.d;
-        if (0 <= (x-H)*h && (x-H)*h <= height) {
-            Vector3 R = nor(x-H, sqrt(height*height + radius*radius));
-            Vector3 n = nor(crs(x-H,x-R));
-            return Collision((r.d*n < 0) ? n : -n, x, t);
-        }
-        return Collision(-1);
-        //if ((x-H)*h > 0 && (x-C)*h < 0) {
-        //    Vector3 R = nor(x-H, sqrt(height*height + radius*radius));
-        //    Vector3 n = nor(crs(x-H,x-R));
-        //    return Collision((r.d*n < 0) ? n : -n, x, t);
-        //} else {
-        //    return Collision(-1);
-        //}
     }
 
     // Print triangle properties.
     void print(std::ostream& os, int i) override {
         std::string s = bleeding("  ", i);
-        os << s + "CONE {" << C-H << ", " << h << "}\n";
     }
 
 };
@@ -733,29 +734,7 @@ public:
         : center(center), axis(axis), radius(radius) {}
 
     Collision intersects(const Ray& r) override {
-        // Vector from cylinder center to ray origin.
-        Vector3 L = r.p - center;
-        double t_ca = L * axis;
-        double d_ca = r.d * axis;
-        Vector3 p_ca = axis * t_ca;
-        Vector3 V = L - p_ca;
-        double v_length_sq = V*V;
-        double d_sq = d_ca * d_ca;
-        double discr = (radius * radius) * d_sq - v_length_sq * d_ca * d_ca;
-        if (discr < 0) return Collision(-1); 
 
-        double t1 = (t_ca + sqrt(discr)) / d_sq;
-        double t2 = (t_ca - sqrt(discr)) / d_sq;
-        if (t1 <= EPSILON_ERROR && t2 <= EPSILON_ERROR) return Collision(-1);
-        if (t1 > EPSILON_ERROR) {
-            Vector3 x = r.d * t1 + r.p;
-            Vector3 x_axis = center + (axis * ((x - center) * axis));
-            return Collision(nor(x - x_axis), x, t1);
-        } else {
-            Vector3 x = r.d * t2 + r.p;
-            Vector3 x_axis = center + (axis * ((x - center) * axis));
-            return Collision(nor(x - x_axis), x, t2);
-        }
     }
 };
 
